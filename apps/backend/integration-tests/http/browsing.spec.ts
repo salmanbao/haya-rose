@@ -432,6 +432,37 @@ const mustFind = <T>(items: T[], predicate: (item: T) => boolean, message: strin
         expect(none.data.count).toBe(0)
       })
 
+      it("filters by handle (PDP lookup path)", async () => {
+        const exact = await browse({ handle: TEE_HANDLE })
+        expect(exact.status).toBe(200)
+        expect(handlesOf(exact.data.products)).toEqual([TEE_HANDLE])
+        expect(exact.data.count).toBe(1)
+
+        const none = await browse({ handle: "zzzz-no-such-handle" })
+        expect(none.status).toBe(200)
+        expect(none.data.count).toBe(0)
+
+        const multi = await browse({
+          handle: [DRESS_HANDLE, TEE_HANDLE],
+        })
+        expect(multi.status).toBe(200)
+        expect(handlesOf(multi.data.products)).toEqual(
+          expect.arrayContaining([DRESS_HANDLE, TEE_HANDLE])
+        )
+      })
+
+      it("filters by id (product-actions availability path)", async () => {
+        const { byHandle } = await getSeededCatalog()
+        const teeId = byHandle[TEE_HANDLE].id
+        const response = await browse({ id: teeId })
+        expect(response.status).toBe(200)
+        expect(handlesOf(response.data.products)).toEqual([TEE_HANDLE])
+
+        const none = await browse({ id: "prod_zzzz-no-such-id" })
+        expect(none.status).toBe(200)
+        expect(none.data.count).toBe(0)
+      })
+
       it("filters by price range on the lowest variant price", async () => {
         const response = await browse({ min_price: 2400, max_price: 2900 })
         expect(response.status).toBe(200)

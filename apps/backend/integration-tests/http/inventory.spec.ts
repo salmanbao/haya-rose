@@ -1,4 +1,4 @@
-import { medusaIntegrationTestRunner, TestEventUtils } from "@medusajs/test-utils"
+import { medusaIntegrationTestRunner } from "@medusajs/test-utils"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import {
   cancelOrderWorkflowId,
@@ -770,6 +770,23 @@ medusaIntegrationTestRunner({
         return { container, inventoryModule, inventoryItemId, karachi, karachiLevel }
       }
 
+      const waitForEvent = async (
+        captured: any[],
+        timeoutMs = 15_000,
+        intervalMs = 50
+      ) => {
+        const deadline = Date.now() + timeoutMs
+        while (Date.now() < deadline) {
+          if (captured.length > 0) {
+            return captured[0]
+          }
+          await new Promise((resolve) => setTimeout(resolve, intervalMs))
+        }
+        throw new Error(
+          `Timed out after ${timeoutMs}ms waiting for the captured event`
+        )
+      }
+
       it("emits inventory.low_stock when an updated level crosses its threshold", async () => {
         const { container, inventoryModule, inventoryItemId, karachi } =
           await getLowStockTestLevel()
@@ -794,24 +811,29 @@ medusaIntegrationTestRunner({
         })
         await utils.waitWorkflowExecutions()
 
-        const waitPromise = TestEventUtils.waitSubscribersExecution(
-          LOW_STOCK_EVENT,
-          eventBus
-        )
+        const captured: any[] = []
+        const listener = async (message: any) => {
+          captured.push(message)
+        }
+        eventBus.subscribe(LOW_STOCK_EVENT, listener)
 
-        await inventoryModule.updateInventoryLevels({
-          inventory_item_id: inventoryItemId,
-          location_id: karachi.id,
-          stocked_quantity: 5,
-        })
+        try {
+          await inventoryModule.updateInventoryLevels({
+            inventory_item_id: inventoryItemId,
+            location_id: karachi.id,
+            stocked_quantity: 5,
+          })
 
-        const [published] = await waitPromise
-        expect(published.data).toMatchObject({
-          inventory_item_id: inventoryItemId,
-          location_id: karachi.id,
-          available_quantity: 5,
-          threshold: 10,
-        })
+          const published = await waitForEvent(captured)
+          expect(published.data).toMatchObject({
+            inventory_item_id: inventoryItemId,
+            location_id: karachi.id,
+            available_quantity: 5,
+            threshold: 10,
+          })
+        } finally {
+          eventBus.unsubscribe(LOW_STOCK_EVENT, listener)
+        }
 
         // Restore the level.
         await inventoryModule.updateInventoryLevels({

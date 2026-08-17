@@ -69,8 +69,14 @@ export const listProducts = async ({
           limit,
           offset,
           region_id: region?.id,
+          // The dev publishable key serves both market channels (seed-shipping);
+          // the standard store products route cannot compute inventory
+          // availability for it (verified 2.19.0), so this listing requests no
+          // inventory fields. Availability-bearing fetches (PDP, add-to-cart)
+          // go through the custom browse route (getProductByHandle / browse by
+          // id), which resolves availability per market sales channel.
           fields:
-            "*variants.calculated_price,+variants.inventory_quantity,*variants.images,*variants.options,*categories,+metadata,+tags,",
+            "*variants.calculated_price,*variants.images,*variants.options,*categories,+metadata,+tags,",
           ...queryParams,
         },
         headers,

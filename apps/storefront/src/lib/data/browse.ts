@@ -13,6 +13,8 @@ import { getRegion } from "./regions"
 export type BrowseProductsParams = {
   countryCode: string
   q?: string
+  handle?: string | string[]
+  id?: string | string[]
   gender?: GenderFilter
   availability?: AvailabilityFilter
   minPrice?: number
@@ -33,6 +35,8 @@ export type BrowseProductsParams = {
 export const browseProducts = async ({
   countryCode,
   q,
+  handle,
+  id,
   gender,
   availability,
   minPrice,
@@ -66,6 +70,8 @@ export const browseProducts = async ({
   }
 
   if (q) query.q = q
+  if (handle) query.handle = handle
+  if (id) query.id = id
   if (gender) query.gender = gender
   if (availability) query.availability = availability
   if (minPrice !== undefined) query.min_price = minPrice
@@ -97,4 +103,22 @@ export const browseProducts = async ({
   const nextPage = count > offset + limit ? page + 1 : null
 
   return { products, count, nextPage }
+}
+
+/**
+ * PDP lookup: fetches a single product by handle through the browse route so
+ * availability and calculated prices are resolved for the market's sales
+ * channel (the standard store products route cannot compute availability
+ * under the multi-channel publishable key — verified against 2.19.0).
+ */
+export const getProductByHandle = async (
+  countryCode: string,
+  handle: string
+): Promise<HttpTypes.StoreProduct | null> => {
+  const { products } = await browseProducts({
+    countryCode,
+    handle,
+    limit: 1,
+  })
+  return products[0] ?? null
 }

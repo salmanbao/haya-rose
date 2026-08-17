@@ -18,6 +18,7 @@ import { MedusaError } from "@medusajs/framework/utils"
 /** Variables required for the backend to boot in any environment. */
 export const REQUIRED_ENV_VARS = [
   "DATABASE_URL",
+  "REDIS_URL",
   "STORE_CORS",
   "ADMIN_CORS",
   "AUTH_CORS",
@@ -53,6 +54,20 @@ export const STRIPE_REQUIRED_ENV_VARS = [
 ] as const
 
 /**
+ * Variables required when the Google OAuth customer-auth provider is enabled
+ * via `AUTH_GOOGLE_ENABLED=true` in `medusa-config.ts` (BD-AUTH-03: Google is
+ * wired env-gated; the storefront only offers Google sign-in when the backend
+ * has registered the provider — verified via GET /auth/customer/providers).
+ *
+ * Names only — values stay in the environment.
+ */
+export const GOOGLE_AUTH_REQUIRED_ENV_VARS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_CALLBACK_URL",
+] as const
+
+/**
  * Returns the names of required variables that are missing or empty.
  * Pure function — unit-testable without touching `process.env`.
  */
@@ -67,6 +82,10 @@ export function getMissingEnvVars(
 
   if (env.PAYMENT_PROVIDER === "stripe") {
     missing.push(...STRIPE_REQUIRED_ENV_VARS.filter((key) => !env[key]))
+  }
+
+  if (env.AUTH_GOOGLE_ENABLED === "true") {
+    missing.push(...GOOGLE_AUTH_REQUIRED_ENV_VARS.filter((key) => !env[key]))
   }
 
   return missing.sort()

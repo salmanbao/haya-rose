@@ -1,4 +1,5 @@
 import {
+  GOOGLE_AUTH_REQUIRED_ENV_VARS,
   REQUIRED_ENV_VARS,
   S3_REQUIRED_ENV_VARS,
   STRIPE_REQUIRED_ENV_VARS,
@@ -8,6 +9,7 @@ import {
 
 const completeEnv = (overrides: Record<string, string> = {}): NodeJS.ProcessEnv => ({
   DATABASE_URL: "postgres://medusa:pass@localhost/medusa-baby-store",
+  REDIS_URL: "redis://localhost:6379",
   STORE_CORS: "http://localhost:8000",
   ADMIN_CORS: "http://localhost:5173,http://localhost:9000",
   AUTH_CORS: "http://localhost:5173,http://localhost:9000,http://localhost:8000",
@@ -25,6 +27,11 @@ describe("getMissingEnvVars", () => {
   it("reports DATABASE_URL when absent", () => {
     const { DATABASE_URL, ...env } = completeEnv()
     expect(getMissingEnvVars(env)).toEqual(["DATABASE_URL"])
+  })
+
+  it("reports REDIS_URL when absent", () => {
+    const { REDIS_URL, ...env } = completeEnv()
+    expect(getMissingEnvVars(env)).toEqual(["REDIS_URL"])
   })
 
   it("reports all missing variables, sorted alphabetically", () => {
@@ -98,6 +105,36 @@ describe("getMissingEnvVars", () => {
     const env = completeEnv({ PAYMENT_PROVIDER: "assanpay" })
     expect(getMissingEnvVars(env)).toEqual([])
   })
+
+  it("does not require Google variables when AUTH_GOOGLE_ENABLED is unset", () => {
+    const env = completeEnv()
+    expect(getMissingEnvVars(env)).toEqual([])
+    for (const key of GOOGLE_AUTH_REQUIRED_ENV_VARS) {
+      expect(env[key]).toBeUndefined()
+    }
+  })
+
+  it("requires the full Google variable set when AUTH_GOOGLE_ENABLED is true", () => {
+    const env = completeEnv({ AUTH_GOOGLE_ENABLED: "true" })
+    expect(getMissingEnvVars(env)).toEqual(
+      [...GOOGLE_AUTH_REQUIRED_ENV_VARS].sort()
+    )
+  })
+
+  it("reports only the absent Google variables when AUTH_GOOGLE_ENABLED is true", () => {
+    const env = completeEnv({
+      AUTH_GOOGLE_ENABLED: "true",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_CALLBACK_URL: "https://storefront.test/api/auth/callback/google",
+    })
+    expect(getMissingEnvVars(env)).toEqual([])
+  })
+
+  it("does not require Google variables for any other AUTH_GOOGLE_ENABLED value", () => {
+    const env = completeEnv({ AUTH_GOOGLE_ENABLED: "false" })
+    expect(getMissingEnvVars(env)).toEqual([])
+  })
 })
 
 describe("assertEnv", () => {
@@ -115,5 +152,10 @@ describe("assertEnv", () => {
   it("throws when the S3 provider is selected but its variables are missing", () => {
     const env = completeEnv({ FILE_PROVIDER: "s3" })
     expect(() => assertEnv(env)).toThrow("S3_FILE_URL")
+  })
+
+  it("throws when Google auth is enabled but its variables are missing", () => {
+    const env = completeEnv({ AUTH_GOOGLE_ENABLED: "true" })
+    expect(() => assertEnv(env)).toThrow("GOOGLE_CLIENT_ID")
   })
 })

@@ -52,7 +52,9 @@ export const getCacheOptions = async (
 export const setAuthToken = async (token: string) => {
   const cookies = await nextCookies()
   cookies.set("_medusa_jwt", token, {
-    maxAge: 60 * 60 * 24 * 7,
+    // Aligned with the backend session lifetime (projectConfig.http.jwtExpiresIn
+    // = "1d", BD-AUTH-02). The cookie must never outlive the token.
+    maxAge: 60 * 60 * 24,
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",

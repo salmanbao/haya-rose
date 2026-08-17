@@ -381,3 +381,16 @@ GST numeric rate, AE VAT numeric rate, provider contract verification
 BD-P-03 → BD-M-02 → BD-G-01/BD-O-01 → BD-R-05 → BD-R-01/02/03 → BD-S-01 →
 BD-I-01 → BD-I-02 → BD-M-04 → BD-M-08 → BD-O-02 → Part B (23 ticks). The
 questionnaire is `docs/architecture/business-decision-questionnaire.md`.
+
+## Customer Authentication Decisions (BD-AUTH-01..04, 2026-08-17)
+
+Resolved during the customer-authentication phase (AGENTS.md §26 authority:
+Medusa-native auth). All APPROVED and IMPLEMENTED. Details and verification
+record: `docs/architecture/authentication-authorization.md`.
+
+| ID | Decision | Resolution | Note |
+| --- | --- | --- | --- |
+| BD-AUTH-01 | Email verification required for emailpass customers | **APPROVED** — native `projectConfig.http.authVerificationsPerActor = { customer: [{ entity_type: "email", auth_provider: "emailpass" }] }` | Verified against installed 2.19.0: register returns actorless token; unverified login returns `verification_required: true`; code delivered via `auth.verification_requested` event (never in HTTP response); confirm via `/auth/verification/confirm`. Integration-tested (customer-auth suite) |
+| BD-AUTH-02 | Session lifetime | **APPROVED** — `http.jwtExpiresIn = "1d"` + storefront `_medusa_jwt` cookie 1d | Bearer-token cookie kept (starter pattern); Medusa cookie-session not used |
+| BD-AUTH-03 | Google OAuth scope | **APPROVED** — env-gated registration now (`AUTH_GOOGLE_ENABLED=true` AND all `GOOGLE_*` vars present); gate OFF by default; storefront button gated on provider list; full E2E blocked on real Google Cloud credentials | `@medusajs/auth-google@2.19.0` options verified: `clientId`, `clientSecret`, `callbackUrl`. New Google identities → actorless token → storefront creates customer from token `user_metadata.email` → `auth.refresh()` |
+| BD-AUTH-04 | Forgot/reset password | **APPROVED** — native flow: `/auth/customer/emailpass/reset-password` (201 for unknown identifiers too — no leak; token via `auth.password_reset` event) + `/auth/customer/emailpass/update` (bearer reset token) | `/forgot-password` and `/reset-password` storefront pages implemented; notification delivery (email) is a future notification-boundary phase |

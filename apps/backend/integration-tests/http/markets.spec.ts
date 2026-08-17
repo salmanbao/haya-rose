@@ -112,6 +112,43 @@ medusaIntegrationTestRunner({
         expect(aeRate.code).toBe("VAT")
       })
 
+      it("binds the native system payment provider to pk and ae so dev checkout lists a payment method", async () => {
+        const container = getContainer()
+        const regionModule = container.resolve(Modules.REGION)
+        const apiKeyModule = container.resolve(Modules.API_KEY)
+        const regions = await regionModule.listRegions({}, { take: null })
+
+        const pakistan = regions.find((region) => region.name === "Pakistan")
+        const uae = regions.find(
+          (region) => region.name === "United Arab Emirates"
+        )
+        expect(pakistan).toBeDefined()
+        expect(uae).toBeDefined()
+
+        const [publishableKey] = await apiKeyModule.listApiKeys({
+          type: "publishable",
+        })
+        expect(publishableKey).toBeDefined()
+        const headers = {
+          "x-publishable-api-key": publishableKey!.token,
+        }
+
+        // The link is observable through the store payment-providers listing
+        // (same verification as REQ-PAY-003) — region.payment_providers is a
+        // link, not a region model relation.
+        for (const region of [pakistan, uae]) {
+          const res = await api.get(
+            `/store/payment-providers?region_id=${region!.id}`,
+            { headers, validateStatus: () => true }
+          )
+          expect(res.status).toBe(200)
+          const providerIds = (res.data.payment_providers ?? []).map(
+            (provider: { id: string }) => provider.id
+          )
+          expect(providerIds).toContain("pp_system_default")
+        }
+      })
+
       it("links a publishable API key to the sales channel", async () => {
         const container = getContainer()
         const remoteLink = container.resolve(ContainerRegistrationKeys.LINK)

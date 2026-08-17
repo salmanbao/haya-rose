@@ -2,6 +2,8 @@
 
 import { sdk } from "@lib/config"
 import medusaError from "@lib/util/medusa-error"
+import { enabledMarketCodes } from "@lib/util/market-selection"
+import { decodeJwtPayload } from "@lib/util/jwt"
 import { HttpTypes } from "@medusajs/types"
 import { FetchError } from "@medusajs/js-sdk"
 import { revalidateTag } from "next/cache"
@@ -261,6 +263,136 @@ export async function signout(countryCode: string) {
   revalidateTag(cartCacheTag)
 
   redirect(`/${countryCode}/account`)
+}
+
+/**
+ * Completes a Google OAuth callback (BD-AUTH-03): exchanges the code+state
+ * with the backend, links/creates the customer, and persists the session.
+ * Returns the path to redirect the customer to (or null when the callback
+ * requires additional steps the storefront doesn't support).
+ *
+ * Flow verified against the installed 2.19.0 auth module and the official
+ * third-party-login guide: the callback token is actorless for a brand-new
+ * Google identity; `/store/customers/me` rejects it, so the storefront
+ * creates the customer (email from the token's user_metadata) and refreshes
+ * the token to bind the actor.
+ */
+export async function completeGoogleCallback(
+  query: Record<string, unknown>
+): Promise<string | null> {
+  let result: Awaited<ReturnType<typeof sdk.auth.callback>>
+
+  try {
+    result = await sdk.auth.callback("customer", "google", query)
+  } catch {
+    return null
+  }
+
+  if (typeof result === "object") {
+    // Verification/MFA-required responses are not supported for Google
+    // sign-in (no verification is configured for the provider).
+    return null
+  }
+
+  let token = result
+
+  const customerExists = await sdk.store.customer
+    .retrieve({}, { authorization: `Bearer ${token}` })
+    .then(() => true)
+    .catch(() => false)
+
+  if (!customerExists) {
+    const payload = decodeJwtPayload(token)
+    const email = payload.user_metadata?.email
+
+    if (typeof email !== "string" || !email) {
+      return null
+    }
+
+    try {
+      await sdk.store.customer.create(
+        { email },
+        {},
+        { authorization: `Bearer ${token}` }
+      )
+
+      const refreshed = await sdk.auth.refresh({
+        authorization: `Bearer ${token}`,
+      })
+      if (typeof refreshed !== "string") {
+        return null
+      }
+      token = refreshed
+    } catch {
+      return null
+    }
+  }
+
+  await setAuthToken(token)
+
+  try {
+    await transferCart()
+  } catch {
+    // Cart transfer failure must not block sign-in; the guest cart remains
+    // accessible to the customer.
+  }
+
+  // The account pages live under the canonical market segment; redirect to
+  // the first enabled market (default "pk").
+  const marketCode = enabledMarketCodes()[0]
+  return `/${marketCode}/account`
+}
+
+export type PasswordResetState =
+  | { state: "success" }
+  | { state: "error"; error: string }
+
+// Requests a password reset email (BD-AUTH-04). The backend answers 201 for
+// both existing and unknown identifiers (no identity leak — verified native
+// behavior), so the UI always shows the same confirmation.
+export async function requestPasswordReset(
+  _currentState: unknown,
+  formData: FormData
+): Promise<PasswordResetState> {
+  const email = formData.get("email") as string
+
+  try {
+    await sdk.auth.resetPassword("customer", "emailpass", {
+      identifier: email,
+    })
+  } catch (error) {
+    return { state: "error", error: String(error) }
+  }
+
+  return { state: "success" }
+}
+
+// Completes a password reset with the token delivered in the reset email
+// (BD-AUTH-04). The token is passed to the update-provider route, which
+// validates and consumes it (verified native behavior).
+export async function completePasswordReset(
+  _currentState: unknown,
+  formData: FormData
+): Promise<PasswordResetState> {
+  const password = formData.get("password") as string
+  const token = formData.get("token") as string
+
+  if (!password || !token) {
+    return { state: "error", error: "Invalid reset request." }
+  }
+
+  try {
+    await sdk.auth.updateProvider(
+      "customer",
+      "emailpass",
+      { password },
+      token
+    )
+  } catch (error) {
+    return { state: "error", error: String(error) }
+  }
+
+  return { state: "success" }
 }
 
 export async function transferCart() {

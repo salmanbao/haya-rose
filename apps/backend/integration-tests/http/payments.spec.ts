@@ -375,15 +375,26 @@ medusaIntegrationTestRunner({
         const headers = { "x-publishable-api-key": storefrontKey.token }
         const { pakistan, uae } = await getMarkets()
 
-        // Unbound regions expose no providers.
+        // Dev parity: the markets seed binds the native system provider to
+        // both PK and AE (verified in the markets seed suite), so checkout
+        // always lists a payment method in development.
         const pkBefore = await api.get(
           `/store/payment-providers?region_id=${pakistan.id}`,
           { headers, validateStatus: () => true }
         )
         expect(pkBefore.status).toBe(200)
-        expect(pkBefore.data.payment_providers).toHaveLength(0)
+        expect(pkBefore.data.payment_providers.map((p) => p.id)).toEqual([
+          SYSTEM_PROVIDER_ID,
+        ])
+        const aeBefore = await api.get(
+          `/store/payment-providers?region_id=${uae.id}`,
+          { headers }
+        )
+        expect(aeBefore.data.payment_providers.map((p) => p.id)).toEqual([
+          SYSTEM_PROVIDER_ID,
+        ])
 
-        // Binding the system provider to the PK region makes it visible there…
+        // Binding is idempotent — re-running never duplicates the provider.
         const container = getContainer()
         await updateRegionsWorkflow(container).run({
           input: {
@@ -391,7 +402,6 @@ medusaIntegrationTestRunner({
             update: { payment_providers: [SYSTEM_PROVIDER_ID] },
           },
         })
-
         const pkAfter = await api.get(
           `/store/payment-providers?region_id=${pakistan.id}`,
           { headers }
@@ -400,11 +410,18 @@ medusaIntegrationTestRunner({
           SYSTEM_PROVIDER_ID,
         ])
 
-        // …but not in the AE region (cross-market isolation).
-        const ae = await api.get(`/store/payment-providers?region_id=${uae.id}`, {
-          headers,
+        // The listing stays region-scoped: a region with no bindings exposes
+        // no providers.
+        const regionModule = container.resolve(Modules.REGION)
+        const emptyRegion = await regionModule.createRegions({
+          name: "Empty Test Region",
+          currency_code: "pkr",
         })
-        expect(ae.data.payment_providers).toHaveLength(0)
+        const eu = await api.get(
+          `/store/payment-providers?region_id=${emptyRegion.id}`,
+          { headers }
+        )
+        expect(eu.data.payment_providers).toHaveLength(0)
 
         // Missing region_id is rejected natively.
         const missing = await api.get("/store/payment-providers", {

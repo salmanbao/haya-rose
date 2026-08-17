@@ -16,6 +16,10 @@ import {
 import { getRegion } from "./regions"
 import { getLocale } from "./locale-actions"
 import { resolveCartSalesChannel } from "@lib/util/resolve-cart-sales-channel"
+import {
+  validateCheckoutFields,
+  type CheckoutFields,
+} from "@lib/util/checkout-validation"
 
 /**
  * Retrieves a cart by its ID. If no ID is provided, it will use the cart ID from the cookies.
@@ -90,17 +94,25 @@ export async function getOrSetCart(countryCode: string) {
   }
 
   if (cart && cart?.region_id !== region.id) {
-    await sdk.store.cart.update(
-      cart.id,
+    // BD-C-04: a stored cart belongs to its original market (currency,
+    // pricing, shipping, payment). Repricing it across markets would mutate
+    // authoritative totals and silently change the customer's items; a market
+    // switch therefore starts a fresh cart in the target market (REQ-CC-004).
+    // The previous cart remains an incomplete cart record.
+    const locale = await getLocale()
+    const cartResp = await sdk.store.cart.create(
       {
         region_id: region.id,
         sales_channel_id: resolveCartSalesChannel(region),
+        locale: locale || undefined,
       },
       {},
       headers
     )
+    await setCartId(cartResp.cart.id)
     const cartCacheTag = await getCacheTag("carts")
     revalidateTag(cartCacheTag)
+    return cartResp.cart
   }
 
   return cart
@@ -392,6 +404,24 @@ export async function setAddresses(currentState: unknown, formData: FormData) {
         province: formData.get("billing_address.province"),
         phone: formData.get("billing_address.phone"),
       } as unknown as HttpTypes.StoreUpdateCart["billing_address"]
+
+    // BD-C-05/06: client-side guard mirroring the backend contract (the
+    // backend re-validates authoritatively on save). Required fields come
+    // from the config-driven per-market set.
+    const shippingAddress = data.shipping_address as
+      | CheckoutFields
+      | undefined
+    const validation = validateCheckoutFields(
+      {
+        ...shippingAddress,
+        email: typeof data.email === "string" ? data.email : undefined,
+      },
+      String(shippingAddress?.country_code ?? "")
+    )
+    if (!validation.ok) {
+      return `Please complete the required fields: ${Object.keys(validation.errors).join(", ")}`
+    }
+
     await updateCart(data)
   } catch (e: unknown) {
     return e instanceof Error ? e.message : String(e)
@@ -455,7 +485,10 @@ export async function updateRegion(countryCode: string, currentPath: string) {
   }
 
   if (cartId) {
-    await updateCart({ region_id: region.id })
+    // BD-C-04: switching markets must never reprice the stored cart — the
+    // cart id is dropped so the next access starts a fresh cart in the
+    // target market (getOrSetCart).
+    await removeCartId()
     const cartCacheTag = await getCacheTag("carts")
     revalidateTag(cartCacheTag)
   }

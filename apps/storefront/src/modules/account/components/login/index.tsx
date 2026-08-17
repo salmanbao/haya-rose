@@ -1,3 +1,5 @@
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { login } from "@lib/data/customer"
 import { LOGIN_VIEW } from "@modules/account/templates/login-template"
 import ErrorMessage from "@modules/checkout/components/error-message"
@@ -7,10 +9,12 @@ import { useActionState } from "react"
 
 type Props = {
   setCurrentView: (view: LOGIN_VIEW) => void
+  googleEnabled?: boolean
 }
 
-const Login = ({ setCurrentView }: Props) => {
+const Login = ({ setCurrentView, googleEnabled = false }: Props) => {
   const [message, formAction] = useActionState(login, null)
+  const { countryCode } = useParams() as { countryCode: string }
 
   return (
     <div
@@ -29,6 +33,24 @@ const Login = ({ setCurrentView }: Props) => {
           We sent a verification link to <strong>{message.email}</strong>.
           Please verify your email, then sign in.
         </div>
+      )}
+      {googleEnabled && (
+        <>
+          <Link
+            href="/api/auth/google"
+            className="w-full text-center text-base-regular text-ui-fg-base bg-ui-bg-subtle border border-ui-border-base rounded-rounded py-3 mb-4 hover:bg-ui-bg-base-hover"
+            data-testid="google-sign-in-button"
+          >
+            Continue with Google
+          </Link>
+          <div className="w-full flex items-center gap-x-4 mb-4">
+            <span className="flex-1 border-t border-ui-border-base" />
+            <span className="text-small-regular text-ui-fg-subtle">
+              or sign in with email
+            </span>
+            <span className="flex-1 border-t border-ui-border-base" />
+          </div>
+        </>
       )}
       <form className="w-full" action={formAction}>
         <div className="flex flex-col w-full gap-y-2">
@@ -49,6 +71,15 @@ const Login = ({ setCurrentView }: Props) => {
             required
             data-testid="password-input"
           />
+        </div>
+        <div className="flex justify-end mt-2">
+          <Link
+            href={`/${countryCode}/forgot-password`}
+            className="text-small-regular text-ui-fg-subtle underline"
+            data-testid="forgot-password-link"
+          >
+            Forgot your password?
+          </Link>
         </div>
         <ErrorMessage
           error={message?.state === "error" ? message.error : null}

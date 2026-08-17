@@ -18,6 +18,8 @@ export const BrowseProductsParamsSchema = z
     region_id: z.string(),
     country_code: z.string().optional(),
     q: z.string().optional(),
+    handle: stringOrArray.optional(),
+    id: stringOrArray.optional(),
     category_id: stringOrArray.optional(),
     collection_id: stringOrArray.optional(),
     tag_id: stringOrArray.optional(),

@@ -7,6 +7,23 @@ import seedInventory from "../../src/migration-scripts/seed-inventory"
 
 const TEST_PASSWORD = "password123"
 
+const waitForEvent = async <T>(
+  captured: T[],
+  timeoutMs = 10_000,
+  intervalMs = 100
+): Promise<T> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (captured.length > 0) {
+      return captured[0]
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new Error(
+    `Timed out after ${timeoutMs}ms waiting for the captured event`
+  )
+}
+
 medusaIntegrationTestRunner({
   testSuite: ({ api, getContainer, utils }) => {
     const runSeeds = async () => {
@@ -90,9 +107,12 @@ medusaIntegrationTestRunner({
     /**
      * Medusa-native customer registration + authentication (the exact flow the
      * storefront uses): register auth identity → create + link customer →
-     * authenticate. In 2.19.0 the emailpass provider returns the actor-attached
-     * JWT directly from POST /auth/customer/emailpass (no callback step — the
-     * provider has no validateCallback, verified in installed source).
+     * complete email verification → authenticate. In 2.19.0 the emailpass
+     * provider returns the actor-attached JWT directly from
+     * POST /auth/customer/emailpass (no callback step — the provider has no
+     * validateCallback, verified in installed source). Since BD-AUTH-01 email
+     * verification is required, login stays gated (verification_required)
+     * until the email is confirmed — the helper completes the full flow.
      */
     const registerCustomer = async (email: string, key: { token: string }) => {
       const registerRes = await api.post(
@@ -123,6 +143,47 @@ medusaIntegrationTestRunner({
         }
       )
       expect(customerRes.status).toBe(200)
+
+      // Email verification (BD-AUTH-01): the plaintext code is NOT in the
+      // HTTP response (stripped by the request-verification workflow) — it is
+      // delivered through the `auth.verification_requested` event payload
+      // (how production sends it by email); confirming marks the identity
+      // verified.
+      const container = getContainer()
+      const eventBus = container.resolve(Modules.EVENT_BUS)
+      const captured: any[] = []
+      const listener = async (message: any) => {
+        captured.push(message)
+      }
+      eventBus.subscribe("auth.verification_requested", listener)
+
+      try {
+        const requestRes = await api.post(
+          "/auth/verification/request",
+          { entity_id: email, entity_type: "email" },
+          {
+            headers: { authorization: `Bearer ${registerRes.data.token}` },
+            validateStatus: () => true,
+          }
+        )
+        expect(requestRes.status).toBe(201)
+
+        const event = await waitForEvent(captured)
+        const code = event.data?.code as string
+        expect(code).toBeTruthy()
+
+        const confirmRes = await api.post(
+          "/auth/verification/confirm",
+          { code },
+          {
+            headers: { authorization: `Bearer ${registerRes.data.token}` },
+            validateStatus: () => true,
+          }
+        )
+        expect(confirmRes.status).toBe(200)
+      } finally {
+        eventBus.unsubscribe("auth.verification_requested", listener)
+      }
 
       const authRes = await api.post(
         "/auth/customer/emailpass",

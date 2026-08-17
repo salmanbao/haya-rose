@@ -29,17 +29,51 @@ end-to-end:
   creates `medusa-<name>-integration-<worker>` databases, migrates them, and
   drops them on cleanup.
 
-Run results (2026-08-16, after Markets & Pricing, Inventory & Warehouses, Media/Storage, Catalog & Categories, Browsing/Search, the Foundation env-validation module, the Inventory low-stock trigger, Cart & Checkout ownership enforcement, the Payments native-pipeline suite, and the Shipping & Fulfillment per-market topology suite):
+Run results (2026-08-16, after Markets & Pricing, Inventory & Warehouses, Media/Storage, Catalog & Categories, Browsing/Search, the Foundation env-validation module, the Inventory low-stock trigger, Cart & Checkout ownership enforcement, the Payments native-pipeline suite, and the Shipping & Fulfillment per-market topology suite; 2026-08-17 after the Redis modules and the Customer Authentication phase; 2026-08-17 after the Cart & Checkout foundation phase — see the suite sections below for per-suite docs):
 
 ```text
-pnpm --filter @dtc/backend test:unit            → PASS (69/69: browse helpers + env-config validation 15 + low-stock helper 10 + cart-ownership helper 7)
-pnpm --filter @dtc/backend test:integration:http → PASS (89 tests: health 7 + markets 6 + inventory 12 + storage 7 + catalog 10 + browsing 33 + cart-ownership 8 + payments 6 + shipping 6; ~6 min — run with `--testTimeout=180000` because a fresh-schema boot runs the full core migration set)
+pnpm --filter @dtc/backend test:unit            → PASS (85/85: browse helpers 37 + env-config validation 21 + medusa-config wiring 10 [5 auth + 5 Redis modules] + low-stock helper 10 + cart-ownership helper 7)
+pnpm --filter @dtc/backend test:integration:http → PASS (114 tests: health 1 + markets 7 + inventory 12 + storage 7 + catalog 10 + browsing 35 + cart-ownership 8 + customer-auth 9 + payments 6 + shipping 6 + checkout 13; ~7 min — run with `--testTimeout=180000` because a fresh-schema boot runs the full core migration set; STOP the local `medusa develop`/`pnpm dev` server first — its in-process BullMQ workers share the `events-queue`/workflow queues with the harness and cause `waitForEvent`-style timeouts)
 pnpm --filter @dtc/backend lint                 → PASS
 pnpm --filter @dtc/backend build                → PASS
 pnpm --filter @dtc/storefront lint              → PASS (0 errors, 3 pre-existing warnings)
-pnpm --filter @dtc/storefront test              → PASS (118 tests / 16 suites; +6 resolve-cart-sales-channel)
-pnpm --filter @dtc/storefront build             → PASS
+pnpm --filter @dtc/storefront test              → PASS (136 tests / 18 suites; +12 checkout-validation BD-C-05/06)
+pnpm --filter @dtc/storefront build             → PASS (requires the dev backend running — the sitemap route fetches the live catalog)
 ```
+
+### Customer authentication integration suite (`customer-auth.spec.ts`)
+
+TDD suite for the approved auth decisions BD-AUTH-01..04 (9 tests, all
+green; Phase 9, 2026-08-17). Proves: provider listing (emailpass only while
+the Google gate is off); register returns an actorless token; unverified
+login returns `verification_required: true` and the token cannot reach
+`/store/customers/me` (401); the plaintext code is NOT in the verification
+HTTP response but is delivered via the `auth.verification_requested` event
+(captured by an event-bus subscriber, decoded and used against
+`/auth/verification/confirm`); wrong password 401; duplicate registration
+401; wrong verification code 4xx; a verified login yields a full token that
+reaches `/store/customers/me` and binds carts created while unverified
+(cart-ownership linkage via the publishable-key↔sales-channel link); and
+the password-reset flow: `/auth/customer/emailpass/reset-password` → 201 for
+unknown identifiers too (no identity leak), reset token via the
+`auth.password_reset` event, `/auth/customer/emailpass/update` with the
+bearer reset token, then the new password logs in and the old one no longer
+does.
+
+Harness facts learned:
+
+- The auth verification routes are at `/auth/verification/request` and
+  `/auth/verification/confirm` — there is no `/auth/customer/verification/*`
+  path.
+- The request-verification workflow strips the code from its HTTP response;
+  tests must capture it from the `auth.verification_requested` event payload
+  (subscribe before the request, unsubscribe in `finally`).
+- Region/SC module `create` calls return a single object, not an array; region
+  `countries` are plain ISO codes.
+- Cart creation with a customer requires the publishable key to be linked to
+  the cart's sales channel (400 otherwise); link via
+  `ContainerRegistrationKeys.LINK` + `getLinkModule(...)` + `.create(keyId,
+  channelId)`.
 
 ### Shipping & Fulfillment integration suite (`shipping.spec.ts`)
 
@@ -58,7 +92,10 @@ store surface cannot create fulfillments.
 
 TDD suite for the native payment pipeline (6 tests, all green; Phase 5).
 Proves: region-scoped store provider listing via `region_payment_provider`
-(REQ-PAY-003); collection + single-authoritative-session creation
+(REQ-PAY-003 — updated 2026-08-17 to the dev-seed contract: both markets
+list `pp_system_default`, re-binding is idempotent, a fresh region with no
+bindings exposes zero providers, missing `region_id` → 400); collection +
+single-authoritative-session creation
 (REQ-PAY-004/030); authorize-at-completion order-first flow (REQ-PAY-006);
 capture-once + duplicate-capture idempotency (REQ-PAY-010/031); refund ≤
 captured + over-refund rejection (REQ-PAY-011); the native webhook pipeline
@@ -83,26 +120,49 @@ Harness facts learned:
 
 ### Backend env-config validation unit suite (`src/config/__tests__/env.unit.spec.ts`)
 
-TDD suite for `src/config/env.ts` (15 tests, all green). Covers:
-`getMissingEnvVars` (complete env → empty; missing `DATABASE_URL`; all-missing
-sorted; empty-string treated as missing; S3 vars **not** required when
-`FILE_PROVIDER` unset/local; full `S3_*` set required when `FILE_PROVIDER=s3`;
-partial S3 sets) and `assertEnv` (no-throw on complete env; throws a
-`MedusaError` naming every missing var; throws when S3 selected without its
-vars). Wired into `medusa-config.ts` **after** `loadEnv` and **skipped when
+TDD suite for `src/config/env.ts` (21 tests, all green). Covers:
+`getMissingEnvVars` (complete env → empty; missing `DATABASE_URL`; **missing
+`REDIS_URL`**; all-missing sorted; empty-string treated as missing; S3 vars
+**not** required when `FILE_PROVIDER` unset/local; full `S3_*` set required
+when `FILE_PROVIDER=s3`; partial S3 sets; **Google auth vars not required
+unless `AUTH_GOOGLE_ENABLED=true`, full set required when enabled, only absent
+ones reported, other gate values need nothing**) and `assertEnv` (no-throw on
+complete env; throws a `MedusaError` naming every missing var; throws when S3
+selected without its vars; **throws when Google auth is enabled without its
+vars**). Wired into `medusa-config.ts` **after** `loadEnv` and **skipped when
 `NODE_ENV=test`** — the integration runner loads the real config and supplies
 its own disposable database connection (verified: integration suite still
-66/66 PASS with the guard in place).
+PASS with the guard in place).
+
+### Backend medusa-config unit suite (`src/config/__tests__/medusa-config.unit.spec.ts`)
+
+TDD suite for the `medusa-config.ts` wiring (10 tests, all green). Two groups:
+
+- **Customer authentication (5 tests, BD-AUTH-01..03):** the auth module
+  registers `emailpass` always and `google` only when the env gate is enabled
+  with all `GOOGLE_*` vars; session lifetime `1d`; email verification
+  required for emailpass customers.
+- **Redis-backed infrastructure (5 tests, REDIS WIRING = ENABLE NOW):** the
+  cache module resolves `@medusajs/medusa/cache-redis` with `options.redisUrl`;
+  the caching module resolves `@medusajs/medusa/caching` with the `redis`
+  provider (`@medusajs/medusa/caching-redis`); the event bus resolves
+  `@medusajs/medusa/event-bus-redis` with `options.redisUrl`; the workflow
+  engine resolves `@medusajs/medusa/workflow-engine-redis` with
+  `options.redis.redisUrl` (the runtime contract — the loader destructures
+  `options?.redis`, verified in installed 2.19.0); the locking module
+  resolves `@medusajs/medusa/locking` with the `redis` provider
+  (`@medusajs/medusa/locking-redis`).
 
 ### Browsing integration suite (`browsing.spec.ts`)
 
-TDD suite for `src/api/store/products/browse` (33 tests, all green; see
+TDD suite for `src/api/store/products/browse` (35 tests, all green; see
 ADR-0003). Covers: listing shape (store fields + prices + inventory +
 stripped metadata), 8 validation errors, sales-channel scoping (second
 channel with products / empty channel → early empty response), sorting
 (created_at default, title, price asc/desc, best_selling, relevance),
 filtering (gender, brand, season, material, size/color option values,
-category, tag, q, price range, AND semantics), availability (all default,
+category, tag, q, **handle** and **id** — the PDP/add-to-cart lookup
+paths, price range, AND semantics), availability (all default,
 in_stock/out_of_stock, zeroed inventory levels), and pagination (exact
 count, consistent count with filters, empty page past the end).
 
@@ -122,7 +182,7 @@ Key harness facts learned while writing the suite:
 
 ### Markets & Pricing integration suite (`markets.spec.ts`)
 
-TDD suite for `src/migration-scripts/seed-markets.ts` (6 tests, all green):
+TDD suite for `src/migration-scripts/seed-markets.ts` (7 tests, all green):
 
 1. Creates Pakistan/UAE regions with their countries (countries relation
    required: `listRegions({}, { relations: ["countries"], take: null })`).
@@ -142,6 +202,12 @@ TDD suite for `src/migration-scripts/seed-markets.ts` (6 tests, all green):
    region. The test resolves the key linked to the channel containing products.
 6. Idempotency: re-running `seedMarkets` (not the non-idempotent starter seed)
    changes no counts.
+7. The dev/test payment provider binding: both PK and AE regions list
+   `pp_system_default` via `GET /store/payment-providers?region_id=` (the
+   store API is the only observable surface for the `region_payment_provider`
+   link — the region model has no `payment_providers` relation and the link
+   service is not resolvable via remoteQuery in the app). Verified with the
+   publishable-key header; without `region_id` the route 400s natively.
 
 Test-environment facts (verified against installed 2.19.0):
 
@@ -174,6 +240,55 @@ cart existence); unauthenticated ID access to a customer-owned cart allowed
 preserved for unknown cart IDs. Customers are registered through the native
 Medusa auth flow (register → `/store/customers` link → login JWT), which
 also proves the store bearer-auth path populates `req.auth_context`.
+
+### Cart & Checkout foundation integration suite (`checkout.spec.ts`)
+
+TDD suite proving the **native** Medusa 2.19.0 cart/checkout contract the
+storefront relies on (13 tests, all green; Phase Cart & Checkout
+foundation, REQ-CC-004..022):
+
+- Create cart: region required; unknown region → 400; client currency
+  rejected (`.strict()` validator → `invalid_data`), currency resolved from
+  the region; line items + calculated prices returned.
+- Update cart: price/shipping fields not accepted (strict validator,
+  400); discounts applied to the DTO totals.
+- Line items: add (quantity + tax), quantity updates, removal, variant
+  not-found → 400, over-inventory add → 400.
+- Shipping: manual fulfillment option listing per region, add shipping
+  method, invalid method → 400.
+- Payment sessions: create (no capture), update (bad payload → 400),
+  complete flow.
+- Completion: empty cart → "Cannot complete a cart with no items"; missing
+  shipping → "No shipping method selected…"; missing payment collection →
+  "Payment collection has not been initiated for cart"; full flow
+  (addresses → shipping → payment sessions → complete) → order created
+  with the cart's region/currency and line items; re-completion is
+  rejected once the cart is completed.
+
+Verified 2.19.0 contracts recorded here (checkout.spec.ts asserts these):
+
+- Store error shape: `{ message, type }`, `type` derived from status
+  (400 → `invalid_data`, 401 → `unauthorized`, 404 → `not_found`).
+- Store cart/order DTO totals are **tax-inclusive**: `item_total =
+  item_subtotal + item_tax_total`, `total = item_total + shipping_total`
+  (NOT `+ tax_total`); line items expose `unit_price`, `quantity`,
+  `tax_lines` (no `total`/`subtotal`, no tax-line `amount` in defaults).
+- `pricingModule.updatePrices` is the array form
+  `updatePrices([{ id, amount }])`; `{selector,update}` crashes. The Price
+  entity has no `variant_id` filter — resolve `variant → price_set` via
+  `remoteLink.getLinkModule(Modules.PRODUCT, "variant_id",
+  Modules.PRICING, "price_set_id")` then `listPrices({ currency_code,
+  price_set_id })`.
+- `orderModule.listOrders` crashes ("Shipping method version is required
+  to load adjustments") → use `query.graph({ entity: "order", fields:
+  ["id", "customer_id"] })`.
+- Verified-customer helper: register → `POST /store/customers` with the
+  actorless token (links the auth identity to the customer) → verification
+  request/confirm → login; lowercase `authorization` header.
+- Payment-session creation does **not** check region binding
+  (create-payment-sessions workflow has no region check).
+- `updateTaxLinesWorkflow`/`update-tax-lines` run at cart create and on
+  line-item/shipping changes; totals are computed in the DTO layer.
 
 ### Inventory & Warehouses integration suite (`inventory.spec.ts`)
 
@@ -405,7 +520,10 @@ Established 2026-08-16 (storefront feature work — gap #4 deferred item).
 ```bash
 # Backend (from repo root or apps/backend)
 pnpm --filter @dtc/backend test:unit
-pnpm --filter @dtc/backend test:integration:http
+pnpm --filter @dtc/backend test:integration:http   # requires Redis up;
+                                                    # STOP `medusa develop` first
+                                                    # (shared queues — dev workers
+                                                    # steal test jobs)
 pnpm --filter @dtc/backend test:integration:modules
 
 # Storefront (from repo root or apps/storefront)
@@ -423,13 +541,29 @@ pnpm test
 - Backend test files: `apps/backend/integration-tests/http/health.spec.ts`
   (1 smoke test), `apps/backend/integration-tests/http/markets.spec.ts`
   (6 tests), `apps/backend/integration-tests/http/inventory.spec.ts`
-  (9 tests), `apps/backend/integration-tests/http/storage.spec.ts`
-  (7 tests), and `apps/backend/integration-tests/http/catalog.spec.ts`
-  (10 tests) — 33 tests total; backend unit tests:
+  (12 tests), `apps/backend/integration-tests/http/storage.spec.ts`
+  (7 tests), `apps/backend/integration-tests/http/catalog.spec.ts`
+  (10 tests), `apps/backend/integration-tests/http/shipping.spec.ts`
+  (6 tests), `apps/backend/integration-tests/http/payments.spec.ts`
+  (6 tests), `apps/backend/integration-tests/http/browsing.spec.ts`
+  (33 tests), `apps/backend/integration-tests/http/cart-ownership.spec.ts`
+  (8 tests), `apps/backend/integration-tests/http/customer-auth.spec.ts`
+  (9 tests) — 98 tests total; backend unit tests:
   `src/api/store/products/browse/__tests__/browse-helpers.unit.spec.ts`
-  (37 tests) and `src/config/__tests__/env.unit.spec.ts` (11 tests) —
-  48 unit tests total.
+  (37 tests), `src/config/__tests__/env.unit.spec.ts` (21 tests),
+  `src/config/__tests__/medusa-config.unit.spec.ts` (10 tests: 5 auth
+  BD-AUTH-01..03 + 5 Redis module wiring — REDIS WIRING = ENABLE NOW),
+  `src/inventory/__tests__/low-stock.unit.spec.ts` (10 tests), and
+  `src/api/store/carts/__tests__/ownership.unit.spec.ts` (7 tests) — 85 unit
+  tests total.
+- Integration suite status (2026-08-17): **98/98 PASS** with the Redis-backed
+  modules wired (`jest.config.js` sets `testTimeout: 60000`; the app boot with
+  Redis modules exceeds Jest's default 5s hook timeout). The suite boots the
+  real `medusa-config.ts`, so Redis must be running, and the dev server must
+  be stopped first (shared `events-queue`/workflow queues — a dev server's
+  workers consume test jobs; observed 2026-08-17: running the suite with the
+  dev server up failed exactly the event-waiting tests of the customer-auth
+  suite with `Timed out ... waiting for the captured event`).
 - Storefront test files: `apps/storefront/src/lib/util/*.test.ts` and
-  `apps/storefront/src/lib/seo/*.test.ts` (12 suites, 81 tests). Backend
-  unit/module suites remain empty — no unit-testable custom code exists
-  yet; the next feature task must write its tests first (TDD).
+  `apps/storefront/src/lib/seo/*.test.ts` plus
+  `apps/storefront/src/lib/util/jwt.test.ts` (17 suites, 124 tests).

@@ -125,6 +125,12 @@ export async function GET(
   if (params.q) {
     filters.q = params.q
   }
+  if (params.handle) {
+    filters.handle = params.handle
+  }
+  if (params.id) {
+    filters.id = params.id
+  }
   if (params.category_id) {
     filters.categories = {
       id: params.category_id,

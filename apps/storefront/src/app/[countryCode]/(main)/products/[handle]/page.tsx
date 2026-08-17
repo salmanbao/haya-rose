@@ -1,6 +1,7 @@
 import { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { listProducts } from "@lib/data/products"
+import { getProductByHandle } from "@lib/data/browse"
 import { listCategories } from "@lib/data/categories"
 import { getRegion, listRegions } from "@lib/data/regions"
 import { getBaseURL } from "@lib/util/env"
@@ -90,10 +91,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     notFound()
   }
 
-  const product = await listProducts({
-    countryCode: params.countryCode,
-    queryParams: { handle },
-  }).then(({ response }) => response.products[0])
+  const product = await getProductByHandle(params.countryCode, handle)
 
   if (!product) {
     notFound()
@@ -131,16 +129,16 @@ export default async function ProductPage(props: Props) {
     notFound()
   }
 
-  const pricedProduct = await listProducts({
-    countryCode: params.countryCode,
-    queryParams: { handle: params.handle },
-  }).then(({ response }) => response.products[0])
-
-  const images = getImagesForVariant(pricedProduct, selectedVariantId)
+  const pricedProduct = await getProductByHandle(
+    params.countryCode,
+    params.handle
+  )
 
   if (!pricedProduct) {
     notFound()
   }
+
+  const images = getImagesForVariant(pricedProduct, selectedVariantId)
 
   const canonical = buildCanonicalUrl({
     baseUrl: getBaseURL(),

@@ -12,7 +12,7 @@ generated `package.json` files during initialization (2026-08-15).
 | git | 2.43.0 | |
 | OS | Linux (Ubuntu 24.04 base, kernel 7.0.0-generic) | |
 | PostgreSQL server | 16.14 | System service, localhost:5432 |
-| Redis server | 7.0.15 | System service, localhost:6379 |
+| Redis server | 7.0.15 | System service, localhost:6379 — wired into Medusa 2026-08-17: cache, caching (graph-query), event bus, workflow engine, distributed locking (supporting infra only; PostgreSQL remains authoritative) |
 | Docker / Compose | not installed | Local Postgres/Redis run as system services instead |
 
 ## Medusa Backend (`apps/backend`)

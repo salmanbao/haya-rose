@@ -16,9 +16,13 @@ Verified local development setup for the initialized repository (2026-08-15).
 | Service | Address | Purpose | Authority |
 | --- | --- | --- | --- |
 | PostgreSQL | `localhost:5432` | Commerce database (`medusa-baby-store`) | authoritative |
-| Redis | `localhost:6379` | Caching/temp state (not yet wired into Medusa) | supporting only |
+| Redis | `localhost:6379` | Caching/graph-query cache/event bus/workflow engine/distributed locking (wired 2026-08-17) | supporting only |
 | Medusa backend + Admin | `http://localhost:9000` | Commerce engine + Admin at `/app` | — |
 | Next.js storefront | `http://localhost:8000` | Customer-facing storefront | — |
+
+Redis runs as the `redis-server.service` systemd unit (supervised — it
+restarts itself after a stop). Manage it with `sudo systemctl stop|start
+redis-server`; the Medusa modules reconnect automatically after recovery.
 
 ## Database Setup (done during initialization)
 
@@ -63,7 +67,7 @@ pnpm --filter @dtc/backend dev        # http://localhost:9000, Admin at /app
 pnpm --filter @dtc/storefront dev     # http://localhost:8000
 
 # 4. Storefront unit tests (jest, node environment)
-pnpm --filter @dtc/storefront test    # 81 tests / 12 suites (src/**/*.test.ts)
+pnpm --filter @dtc/storefront test    # 124 tests / 17 suites (src/**/*.test.ts)
 ```
 
 Root workspace shortcuts (turbo):
@@ -92,7 +96,13 @@ pnpm exec medusa db:migrate:scripts   # runs only pending scripts (tracked in sc
 - `seed-markets.ts` — Pakistan (pkr) and UAE (aed) regions, PK/AE tax regions
   (zero-rate interim), sales channel ↔ publishable key link, pkr/aed variant
   prices with region rules (DEMO amounts 2500/45 — real pricing is the catalog
-  phase). **Idempotent** — safe to re-run (skipped once recorded).
+  phase), and the **dev/test payment provider binding**: both PK and AE
+  regions get `pp_system_default` via `updateRegionsWorkflow` (idempotent;
+  dev-only — production markets replace it with real gateways). **Idempotent**
+  — safe to re-run (skipped once recorded). To RE-APPLY a modified seed on an
+  already-seeded DB: `DELETE FROM script_migrations WHERE script_name =
+  'seed-markets.ts'` (script name, not `name`) in the app DB, then
+  `db:migrate:scripts` again.
 - `seed-inventory.ts` — Karachi Warehouse (pk) and Dubai Warehouse (ae) stock
   locations, linked to every sales channel (re-using the starter's European
   Warehouse); one inventory item per SKU'd variant linked via
@@ -173,22 +183,57 @@ Frontend:
   connection product/store pages render Medusa data              PASS
   markets    /pk, /ae, /dk render catalog with per-region prices PASS
              (PKR 2,500 / AED 45.00 / €12.00 — verified 2026-08-16)
-  unit tests pnpm --filter @dtc/storefront test                  PASS (81/81)
+  unit tests pnpm --filter @dtc/storefront test                  PASS (124/124)
   seo        /robots.txt + /sitemap.xml → 200                   PASS
              canonical + JSON-LD (Product/Breadcrumb/Organization) on
              product/category/home pages                         PASS
              deep category URLs (e.g. /pk/categories/baby-clothing/
              girls/girls-dresses) resolve; wrong chains → 404    PASS
 
+Customer authentication (Phase 9, 2026-08-17, decisions BD-AUTH-01..04):
+  providers  GET /auth/customer/providers → emailpass only
+             (Google gate OFF: AUTH_GOOGLE_ENABLED unset)        PASS
+  register   POST /auth/customer/emailpass/register → actorless
+             JWT (registration never gated)                      PASS
+  login      unverified → { verification_required: true, token }
+             (actorless token → /store/customers/me 401)         PASS
+  verify     code via `auth.verification_requested` event →
+             /auth/verification/confirm → full token → me 200    PASS (integration)
+  reset      /auth/customer/emailpass/reset-password → 201 for
+             unknown identifiers too (no identity leak); token
+             via `auth.password_reset` event; update provider
+             with bearer reset token; new password logs in       PASS
+  google     storefront button hidden when gate off; /api/auth/
+             google + callback wired; E2E blocked on real
+             Google Cloud OAuth credentials (deployment item)    PARTIAL
+  pages      /pk/account (login), /pk/forgot-password,
+             /pk/reset-password render (smoke-verified)          PASS
+
 Redis:
   server     redis-cli ping → PONG                               PASS
-  Medusa     not wired in baseline (in-memory fallback — official dev default)
+  Medusa     wired 2026-08-17 (cache, caching, event bus, workflow
+             engine, locking modules → Redis; see medusa-config.ts)
+  caching    browse: miss ~0.20s → hit ~0.014s; `mc:*` keys in Redis  PASS
+  sharing    second instance (:9100) hits keys written by :9000     PASS
+  locking    `medusa_lock:*` keys observed during acquire/release    PASS
+  outage     boot with Redis unreachable fails fast with clear error PASS
 
 Backend integration tests (2026-08-16):
   pnpm --filter @dtc/backend test:integration:http               PASS
   (boots the app against a disposable test DB; GET /health → 200)
   suites: catalog 10, markets 3, inventory 6, storage 7, browsing 33,
   health 7 — 66/66 total PASS
+
+Backend integration tests (2026-08-17, Redis modules wired):
+  pnpm --filter @dtc/backend test:integration:http               PASS
+  suites: health 1, markets 6, inventory 12, storage 7, catalog 10,
+  browsing 33, shipping 6, payments 6, cart-ownership 8,
+  customer-auth 9 — 98/98 total PASS
+  (requires Redis running; stop `medusa develop` first — see below;
+  observed 2026-08-17: with the dev server up, exactly the
+  event-waiting customer-auth tests failed with `Timed out ... waiting
+  for the captured event` — shared BullMQ queues; 98/98 again after
+  stopping it)
 
 Browse route (Phase 7, 2026-08-16):
   GET /store/products/browse requires the x-publishable-api-key header
@@ -206,12 +251,25 @@ Browse route (Phase 7, 2026-08-16):
 
 ## Troubleshooting
 
-- **`redisUrl not found. A fake redis instance will be used.`** — expected on
-  the baseline. The caching module uses an in-memory provider because no Redis
-  cache provider is configured in `medusa-config.ts`. Redis itself is running;
-  wiring Redis-backed modules is a later config task.
-- **`Local Event Bus installed. This is not recommended for production.`** —
-  expected dev behavior; `event-bus-redis` is installed but not enabled.
+- **`redisUrl not found. A fake redis instance will be used.`** — only appears
+  when `REDIS_URL` is unset. With the Redis modules wired (2026-08-17) this is
+  no longer expected: `.env` defines `REDIS_URL=redis://localhost:6379` and
+  `MEDUSA_FF_CACHING=true` (enables the graph-query cache). If the log line
+  reappears, check that `.env` is present and the service is up.
+- **Redis-backed modules now wired** — `medusa-config.ts` registers
+  `cache`, `caching` (provider `redis`), `eventBus`, `workflowEngine`, and
+  `locking` against Redis. Log messages like "Local Event Bus installed" no
+  longer appear. Queue/namespace defaults: `events-queue` (event bus),
+  `bull:medusa-workflows*` (workflow engine), `mc:*` (cache),
+  `medusa_lock:*` (locking). PostgreSQL remains the source of truth.
+- **Integration tests require Redis and a quiet dev server** — the test
+  harness boots the real `medusa-config.ts`, so Redis must be running. The
+  test app uses the same Redis queues as `medusa develop`; a running dev
+  server's BullMQ workers steal test jobs (and execute them against its own
+  container/DB), which breaks suites non-deterministically. **Stop the dev
+  server before running `test:integration:http`** and restart it afterwards.
+  `jest.config.js` sets `testTimeout: 60000` because app boot with the Redis
+  modules exceeds Jest's default 5s hook timeout.
 - **Storefront redirects `/` → `/{countryCode}`** — the starter's locale
   middleware; the default region (`dk`) comes from seed data.
 - **Stale catalog data after seeding/reseeding** — the storefront caches

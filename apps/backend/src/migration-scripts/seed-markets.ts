@@ -41,6 +41,9 @@ const PUBLISHABLE_KEY_TITLE = "Default Publishable API Key"
 // the provider is actually registered (PAYMENT_PROVIDER=stripe).
 const STRIPE_PROVIDER_ID = "pp_stripe_stripe"
 
+// Native system provider (test/dev only — real gateways replace it per market).
+const SYSTEM_PROVIDER_ID = "pp_system_default"
+
 export default async function seedMarkets({
   container,
 }: {
@@ -118,11 +121,38 @@ export default async function seedMarkets({
     })
   }
 
+  // Dev checkout parity: bind the native system payment provider
+  // ("pp_system_default", verified in @medusajs/payment loaders) to both
+  // markets so the storefront checkout lists a payment method and the manual
+  // payment flow can be exercised end-to-end. It requires no credentials and
+  // is a development/test provider only — production markets must replace it
+  // with the selected per-market gateways (AssanPay etc.). Idempotent: re-runs
+  // skip regions that already carry the provider.
+  for (const currencyCode of ["pkr", "aed"]) {
+    const regionId = regionIdsByCurrency.get(currencyCode)
+    if (!regionId) {
+      continue
+    }
+    const [regionRecord] = await regionModule.listRegions({ id: regionId })
+    const boundProviderIds = (regionRecord?.payment_providers ?? []).map(
+      (provider: { id: string }) => provider.id
+    )
+    if (!boundProviderIds.includes(SYSTEM_PROVIDER_ID)) {
+      await updateRegionsWorkflow(container).run({
+        input: {
+          selector: { id: regionId },
+          update: {
+            payment_providers: [...boundProviderIds, SYSTEM_PROVIDER_ID],
+          },
+        },
+      })
+    }
+  }
+
   // Region ↔ payment-provider bindings (T-PAY-02): bind Stripe to the AE
-  // region when registered. The PK region gets no binding until AssanPay's
-  // contract is verified and the provider is registered.
-  if (process.env.PAYMENT_PROVIDER === "stripe") {
-    const aeRegion = regionIdsByCurrency.get("aed")
+  // region when registered. The PK region gets no Stripe binding until
+  // AssanPay's contract is verified and the provider is registered.
+  if (process.env.PAYMENT_PROVIDER === "stripe") {    const aeRegion = regionIdsByCurrency.get("aed")
     if (aeRegion) {
       const [aeRegionRecord] = await regionModule.listRegions({
         id: aeRegion,

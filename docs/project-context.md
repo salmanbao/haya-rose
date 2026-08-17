@@ -37,7 +37,8 @@ Verified actual architecture (matches AGENTS.md §3):
 Customers → Next.js storefront (apps/storefront, :8000)
               → Medusa v2.19.0 backend (apps/backend, :9000)
                   ├── PostgreSQL 16.14  (db: medusa-baby-store) — authoritative
-                  ├── Redis 7.0.15       (running; NOT yet wired into Medusa)
+                  ├── Redis 7.0.15       (wired 2026-08-17: cache, caching,
+                  │                       event bus, workflow engine, locking — supporting only)
                   └── Cloudflare R2      (PLANNED — via native file-s3 provider)
 ```
 
@@ -128,10 +129,10 @@ Verified against installed Medusa 2.19.0 (packages, database tables, live API):
   (items/levels/reservations/stock locations), promotions (+ campaigns,
   budgets, rules), sales channels, stores, tax, users, draft orders, auth
   (email/password enabled).
-- **Infrastructure (installed; baseline in-memory/local):** caching (+redis),
-  event-bus (+redis), workflow engine (+redis), locking (+redis), file
-  (local default + S3 provider), search (local; module requires config),
-  notification (local/logger; sendgrid provider installed).
+- **Infrastructure (wired to Redis 2026-08-17):** caching (+redis), event-bus
+  (+redis), workflow engine (+redis), locking (+redis), file (local default +
+  S3 provider), search (local; module requires config), notification
+  (local/logger; sendgrid provider installed).
 - **Extension points (scaffolded, empty):** `src/api`, `src/workflows`,
   `src/modules`, `src/links`, `src/subscribers`, `src/jobs`, `src/admin`.
 - **Seed data:** executed via `src/migration-scripts/initial-data-seed.ts`
@@ -153,8 +154,13 @@ Full matrix: `docs/architecture/medusa-capability-matrix.md`.
   region map with 1h revalidation.
 - Caching: `force-cache` + `revalidateTag` keyed by a per-session
   `_medusa_cache_id` cookie; data functions use `getCacheOptions(tag)`.
-- Auth: customer JWT in `_medusa_jwt` httpOnly cookie (7d, `sameSite: strict`,
-  `secure` in production); email/password login via backend auth module.
+- Auth: customer JWT in `_medusa_jwt` httpOnly cookie (1d since 2026-08-17,
+  `sameSite: strict`, `secure` in production); email/password login via
+  backend auth module; email verification REQUIRED natively
+  (`authVerificationsPerActor`). Google OAuth wired env-gated
+  (`AUTH_GOOGLE_ENABLED=true` + `GOOGLE_*` credentials; off by default) with
+  storefront button + callback handlers. Forgot/reset-password pages use the
+  native emailpass reset flow (token via `auth.password_reset` event).
   Cart id in `_medusa_cart_id` cookie; pending-signup data in
   `_medusa_pending_customer`.
 - Localization: backend `/store/locales` endpoint + `x-medusa-locale` header
@@ -191,14 +197,22 @@ Full matrix: `docs/architecture/medusa-capability-matrix.md`.
 
 ## Redis
 
-- Redis 7.0.15 running on `localhost:6379` (system service); `redis-cli ping`
-  → PONG.
+- Redis 7.0.15 running on `localhost:6379` (system service, `redis-server.service`
+  systemd unit); `redis-cli ping` → PONG.
 - `REDIS_URL=redis://localhost:6379` present in `apps/backend/.env`.
-- **Not wired into Medusa:** the baseline `medusa-config.ts` configures no
-  redis-backed modules. Installed (not enabled): `caching-redis`,
-  `event-bus-redis`, `workflow-engine-redis`, `locking-redis` (ioredis 5.8.2).
-  Runtime uses in-memory fallbacks ("fake redis instance", "Local Event Bus",
-  "in-memory" locking/workflow) — the official development default.
+- **Wired into Medusa (2026-08-17):** `medusa-config.ts` registers `cache`
+  (`cache-redis`), `caching` (`caching` + `caching-redis` provider; gated by
+  `MEDUSA_FF_CACHING=true` — enables the graph-query cache), `eventBus`
+  (`event-bus-redis`, queue `events-queue`), `workflowEngine`
+  (`workflow-engine-redis`, queues `bull:medusa-workflows*`), and `locking`
+  (`locking` + `locking-redis`, namespace `medusa_lock:`). Option names
+  verified against the installed 2.19.0 module contracts; defaults retained
+  (cache prefix `mc:`). `REDIS_URL` is validated at startup by
+  `src/config/env.ts`. Framework default workerMode `"shared"` keeps BullMQ
+  workers in-process. Runtime evidence: browse cache miss ~0.20s → hit
+  ~0.014s (`mc:*` keys), multi-process cache sharing verified, `medusa_lock:*`
+  observed during a `medusa exec` lock demo, boot with Redis unreachable
+  fails fast with clear errors.
 - Verified NOT authoritative: all commerce state lives in PostgreSQL; Redis is
   strictly supporting infrastructure.
 
@@ -220,8 +234,10 @@ Full matrix: `docs/architecture/medusa-capability-matrix.md`.
 Medusa-native authentication.
 
 **Methods:**
-- Email/password (enabled in baseline; verified via the Medusa customer auth API)
-- Google OAuth (provider `@medusajs/auth-google` installed; configuration pending)
+- Email/password (enabled; email verification REQUIRED per BD-AUTH-01)
+- Google OAuth (provider `@medusajs/auth-google` wired ENV-GATED per
+  BD-AUTH-03 — off by default; real Google Cloud credentials required to
+  enable; storefront button + callback handlers implemented)
 
 **Admin:**
 Standard Medusa Admin authentication/authorization.
@@ -229,10 +245,17 @@ Standard Medusa Admin authentication/authorization.
 **Better Auth:**
 Not used (previous proposal rejected — see `docs/architecture/gap-analysis.md` historical note).
 
-**Implementation status:**
-Authentication architecture selected. Implementation/configuration pending.
+**Implementation status (2026-08-17):**
+Customer authentication phase DONE per decisions BD-AUTH-01..04 — backend
+(emailpass + env-gated google registration, mandatory email verification,
+1d session, native reset flow) and storefront (login page Google button,
+`/api/auth/google` + `/api/auth/callback/google`, `/forgot-password`,
+`/reset-password`). Integration-tested (customer-auth suite, 9 tests;
+114/114 total) and runtime-verified on :9000. Remaining: enable the Google
+gate with real credentials + E2E sign-in; email delivery of verification
+codes/reset tokens (notification boundary — later phase).
 
-**Verified baseline facts:** the storefront starter authenticates customers with Medusa's native auth (email/password, `_medusa_jwt` httpOnly cookie, Bearer headers; email-verification flow in `customer.ts`). Google customer login is not implemented. `auth-google`/`auth-github`/`auth-oidc` providers are installed but not enabled. Analysis: `docs/architecture/authentication-authorization.md`.
+**Verified baseline facts:** the storefront starter authenticates customers with Medusa's native auth (email/password, `_medusa_jwt` httpOnly cookie, Bearer headers; email-verification flow in `customer.ts`). Analysis: `docs/architecture/authentication-authorization.md`.
 
 ## Payments
 
@@ -412,7 +435,8 @@ Authentication architecture selected. Implementation/configuration pending.
 - Medusa backend scaffold (2.19.0) + standard Admin — verified build/startup.
 - Next.js storefront scaffold — verified build/startup/backend connection.
 - PostgreSQL role/database + migrations + seed.
-- Redis server running (not wired into Medusa).
+- Redis server running, wired into Medusa 2026-08-17 (cache, caching, event
+  bus, workflow engine, locking — see the Redis section above).
 - `.env.example` files (backend + storefront, names only).
 - Documentation: `docs/` (architecture, infrastructure, testing).
 - Minor storefront lint fixes during initialization (see gap analysis for the
@@ -420,16 +444,27 @@ Authentication architecture selected. Implementation/configuration pending.
 
 ## Planned
 
-Approved future requirements (AGENTS.md §9 + task list), **none implemented —
-implementation has NOT started** (all business decisions are made; the first
-gates are tax rate values and provider contract verification):
-markets (PK/UAE regions) — specification: `docs/specifications/markets-and-pricing.md` — inventory/warehouses — specification:
-`docs/specifications/inventory-and-warehouses.md` — cart/checkout — specification:
-`docs/specifications/cart-and-checkout.md` — shipping/fulfillment (TCS/Aramex) — specification:
-`docs/specifications/shipping-and-fulfillment.md` — payments (AssanPay PK — replaces earlier xPay —, Stripe AE; contract verification per `docs/architecture/provider-verification/`) — specification:
-`docs/specifications/payments.md` — orders — specification:
-`docs/specifications/orders.md` — returns/refunds — specification:
-`docs/specifications/returns-and-refunds.md` — catalog for baby clothing, R2
+## Planned / Implemented
+
+Implemented phases (see the phase sections above and
+`docs/architecture/gap-analysis.md` for detail): Markets & Pricing,
+Inventory & Warehouses, Media/Storage, Catalog & Categories,
+Browsing/Search, Foundation env-validation, low-stock trigger, cart
+ownership enforcement (T-CC-01), Payments native pipeline + provider
+boundaries (Stripe scaffolding; AssanPay blocked on contract
+verification), Shipping & Fulfillment topology, Customer Authentication,
+Redis modules, and the **Cart & Checkout foundation** (native contract
+suite + storefront wiring, BD-C-04 market-switch fresh cart, BD-C-05/06
+field validation — runtime smoke-verified end-to-end; see gap rows 16-17).
+
+Approved future requirements (AGENTS.md §9 + task list), **not yet
+implemented** (gates: provider contract verification for the PK gateway;
+later phases):
+orders (specification:
+`docs/specifications/orders.md`) — returns/refunds — specification:
+`docs/specifications/returns-and-refunds.md` — TCS/Aramex shipping
+adapters (contract verification per `docs/architecture/provider-verification/`) —
+catalog for baby clothing, R2
 media, Google auth, wishlist, reviews, coupons,
 returns/refunds implementation, abandoned cart, recommendations, recently viewed,
 bundles, notifications, search/filter UI, localization, SEO enhancements
@@ -453,7 +488,9 @@ verification tasks, or deferred features — not open business decisions:
 - Notification/communication consent policy — DEFERRED to notifications spec.
 - Email/SMS/WhatsApp notification providers — not selected (notifications
   spec, deferred).
-- Whether Redis-backed modules should be enabled before feature work — open
-  (implementation decision).
+- Whether Redis-backed modules should be enabled before feature work —
+  **RESOLVED (2026-08-17): REDIS WIRING = ENABLE NOW** — cache, caching,
+  event bus, workflow engine, and locking are wired to Redis (see the Redis
+  section and gap-analysis row 3).
 - Search module enablement details — requires verification when search is built.
 - Medusa file module local-provider behavior — not exercised yet.

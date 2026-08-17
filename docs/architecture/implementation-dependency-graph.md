@@ -51,6 +51,11 @@ Markets & Pricing (regions, currencies, sales channels, price sets, tax regions)
 **Work:** fix storefront `tsc`/lint gaps (gap-analysis #1/#2), establish git,
 establish TDD harness (backend jest configured, 0 tests — gap #4), PostgreSQL/
 Redis local foundation, secret handling baseline.
+**Redis state:** **DONE (2026-08-17, approved decision REDIS WIRING = ENABLE
+NOW)** — cache, caching (graph-query, `MEDUSA_FF_CACHING=true`), event bus,
+workflow engine, and locking are wired to Redis (see gap-analysis row 3 and
+project-context). Redis remains supporting infrastructure only; PostgreSQL is
+the authoritative persistence layer.
 **Outputs:** a buildable, tested base.
 **Gates:** none (prerequisite to everything; AGENTS.md §16/§17).
 **Specs:** project-context, gap-analysis.
