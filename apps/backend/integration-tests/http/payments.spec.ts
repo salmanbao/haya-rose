@@ -377,22 +377,52 @@ medusaIntegrationTestRunner({
 
         // Dev parity: the markets seed binds the native system provider to
         // both PK and AE (verified in the markets seed suite), so checkout
-        // always lists a payment method in development.
+        // always lists a payment method in development. Registered market
+        // providers are bound to their own region only (seed-markets.ts):
+        // Safepay → PK, Stripe → AE. Cross-market leakage is asserted below.
+        const registeredProviders = (process.env.PAYMENT_PROVIDER ?? "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+        const expectedPkProviders = [
+          SYSTEM_PROVIDER_ID,
+          ...(registeredProviders.includes("safepay")
+            ? ["pp_safepay_safepay"]
+            : []),
+        ]
+        const expectedAeProviders = [
+          SYSTEM_PROVIDER_ID,
+          ...(registeredProviders.includes("stripe")
+            ? ["pp_stripe_stripe"]
+            : []),
+        ]
         const pkBefore = await api.get(
           `/store/payment-providers?region_id=${pakistan.id}`,
           { headers, validateStatus: () => true }
         )
         expect(pkBefore.status).toBe(200)
-        expect(pkBefore.data.payment_providers.map((p) => p.id)).toEqual([
-          SYSTEM_PROVIDER_ID,
-        ])
+        const pkProviderIds = pkBefore.data.payment_providers.map(
+          (p: { id: string }) => p.id
+        )
+        // Link insert order is non-deterministic (set-regions-payment-
+        // providers creates link rows in parallel), so compare as sets.
+        expect(pkProviderIds.slice().sort()).toEqual(
+          expectedPkProviders.slice().sort()
+        )
         const aeBefore = await api.get(
           `/store/payment-providers?region_id=${uae.id}`,
           { headers }
         )
-        expect(aeBefore.data.payment_providers.map((p) => p.id)).toEqual([
-          SYSTEM_PROVIDER_ID,
-        ])
+        const aeProviderIds = aeBefore.data.payment_providers.map(
+          (p: { id: string }) => p.id
+        )
+        expect(aeProviderIds.slice().sort()).toEqual(
+          expectedAeProviders.slice().sort()
+        )
+        // REQ-PAY-003: a market never lists a provider bound to another
+        // market (Stripe stays out of PK, Safepay stays out of AE).
+        expect(pkProviderIds).not.toContain("pp_stripe_stripe")
+        expect(aeProviderIds).not.toContain("pp_safepay_safepay")
 
         // Binding is idempotent — re-running never duplicates the provider.
         const container = getContainer()

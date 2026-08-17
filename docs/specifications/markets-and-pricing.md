@@ -336,8 +336,8 @@ Contract (no provider implementation):
   currency.
 - **REQ-MP-027** — Payment status never trusted from the client; server-side
   verification/webhooks per AGENTS.md §11.
-- Providers for PK and UAE: **APPROVED selections — AssanPay (PK), Stripe (AE)**
-  (AssanPay replaces the earlier xPay selection; contract verification per
+- Providers for PK and UAE: **APPROVED selections — Safepay (PK), Stripe (AE)**
+  (Safepay replaces the earlier AssanPay selection, which replaced xPay; contract verified per
   `docs/architecture/provider-verification/`; no fake adapters).
 
 ## 16. Shipping Boundary
@@ -349,7 +349,7 @@ Contract (no provider implementation):
   (`shipping_option_price_set` — VERIFIED); rates validated server-side.
 - **REQ-MP-028** — Shipping amounts are computed and applied server-side;
   never client-supplied.
-- Provider selection/credentials: **APPROVED selections — AssanPay (PK), Stripe (AE)**
+- Provider selection/credentials: **APPROVED selections — Safepay (PK), Stripe (AE)**
   (contract verification per `docs/architecture/provider-verification/`;
   credentials UNVERIFIED/not set; no fake adapters).
 

@@ -38,8 +38,19 @@ const PUBLISHABLE_KEY_TITLE = "Default Publishable API Key"
 
 // Stripe (UAE/AED) provider key: `pp_{identifier}_{id}` → `pp_stripe_stripe`
 // (verified in @medusajs/payment loaders). Bound to the AE region only when
-// the provider is actually registered (PAYMENT_PROVIDER=stripe).
+// the provider is actually registered (PAYMENT_PROVIDER includes "stripe").
 const STRIPE_PROVIDER_ID = "pp_stripe_stripe"
+
+// Safepay (Pakistan/PKR) provider key: `pp_{identifier}_{id}` →
+// `pp_safepay_safepay`. Bound to the PK region only when the provider is
+// registered (PAYMENT_PROVIDER includes "safepay"). Approved BD-P-01
+// (revised 2026-08-17: Safepay replaces AssanPay).
+const SAFEPAY_PROVIDER_ID = "pp_safepay_safepay"
+
+const paymentProviders = (process.env.PAYMENT_PROVIDER ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean)
 
 // Native system provider (test/dev only — real gateways replace it per market).
 const SYSTEM_PROVIDER_ID = "pp_system_default"
@@ -121,56 +132,40 @@ export default async function seedMarkets({
     })
   }
 
-  // Dev checkout parity: bind the native system payment provider
-  // ("pp_system_default", verified in @medusajs/payment loaders) to both
-  // markets so the storefront checkout lists a payment method and the manual
-  // payment flow can be exercised end-to-end. It requires no credentials and
-  // is a development/test provider only — production markets must replace it
-  // with the selected per-market gateways (AssanPay etc.). Idempotent: re-runs
-  // skip regions that already carry the provider.
-  for (const currencyCode of ["pkr", "aed"]) {
+  // Region ↔ payment-provider bindings (T-PAY-02): each market gets its
+  // native system provider plus its registered market provider — Safepay →
+  // PK, Stripe → AE. The other market never receives a foreign provider
+  // binding (REQ-PAY-003).
+  //
+  // The binding set is written deterministically (set-regions-payment-
+  // providers replaces the link set, verified in @medusajs/core-flows): the
+  // region module's `listRegions` does not load the region_payment_provider
+  // link, so read-modify-write races (the safepay/stripe binding silently
+  // overwriting the system binding) are avoided entirely. Re-runs converge to
+  // the same set and drop any foreign bindings.
+  const bindings: Record<"pkr" | "aed", string[]> = {
+    pkr: [SYSTEM_PROVIDER_ID],
+    aed: [SYSTEM_PROVIDER_ID],
+  }
+  if (paymentProviders.includes("safepay")) {
+    bindings.pkr.push(SAFEPAY_PROVIDER_ID)
+  }
+  if (paymentProviders.includes("stripe")) {
+    bindings.aed.push(STRIPE_PROVIDER_ID)
+  }
+  for (const currencyCode of ["pkr", "aed"] as const) {
     const regionId = regionIdsByCurrency.get(currencyCode)
     if (!regionId) {
       continue
     }
-    const [regionRecord] = await regionModule.listRegions({ id: regionId })
-    const boundProviderIds = (regionRecord?.payment_providers ?? []).map(
-      (provider: { id: string }) => provider.id
-    )
-    if (!boundProviderIds.includes(SYSTEM_PROVIDER_ID)) {
-      await updateRegionsWorkflow(container).run({
-        input: {
-          selector: { id: regionId },
-          update: {
-            payment_providers: [...boundProviderIds, SYSTEM_PROVIDER_ID],
-          },
+    await updateRegionsWorkflow(container).run({
+      input: {
+        selector: { id: regionId },
+        update: {
+          payment_providers: bindings[currencyCode],
         },
-      })
-    }
-  }
-
-  // Region ↔ payment-provider bindings (T-PAY-02): bind Stripe to the AE
-  // region when registered. The PK region gets no Stripe binding until
-  // AssanPay's contract is verified and the provider is registered.
-  if (process.env.PAYMENT_PROVIDER === "stripe") {    const aeRegion = regionIdsByCurrency.get("aed")
-    if (aeRegion) {
-      const [aeRegionRecord] = await regionModule.listRegions({
-        id: aeRegion,
-      })
-      const boundProviderIds = (aeRegionRecord?.payment_providers ?? []).map(
-        (provider: { id: string }) => provider.id
-      )
-      if (!boundProviderIds.includes(STRIPE_PROVIDER_ID)) {
-        await updateRegionsWorkflow(container).run({
-          input: {
-            selector: { id: aeRegion },
-            update: {
-              payment_providers: [...boundProviderIds, STRIPE_PROVIDER_ID],
-            },
-          },
-        })
-      }
-    }
+      },
+    })
   }
 
   const [publishableKey] = await apiKeyModule.listApiKeys({

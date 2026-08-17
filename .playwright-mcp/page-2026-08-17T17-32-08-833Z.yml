@@ -1,0 +1,18 @@
+- generic [ref=e3]:
+  - generic [ref=e12]:
+    - generic [ref=e18]:
+      - heading "Welcome to Medusa" [level=1] [ref=e19]
+      - paragraph [ref=e20]: Sign in to access the account area
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - textbox "Email" [ref=e26]
+        - generic [ref=e28]:
+          - textbox [ref=e29]:
+            - /placeholder: Password
+          - button "Show password" [ref=e31] [cursor=pointer]
+      - button "Continue with Email" [ref=e37] [cursor=pointer]
+    - generic [ref=e38]:
+      - text: Forgot password? -
+      - link "Reset" [ref=e39] [cursor=pointer]:
+        - /url: /app/reset-password
+  - region "Notifications alt+T"

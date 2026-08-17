@@ -1,9 +1,11 @@
 import {
   GOOGLE_AUTH_REQUIRED_ENV_VARS,
+  LEGACY_SAFEPAY_ENV_VARS,
+  LEGACY_STRIPE_ENV_VARS,
   REQUIRED_ENV_VARS,
   S3_REQUIRED_ENV_VARS,
-  STRIPE_REQUIRED_ENV_VARS,
   assertEnv,
+  getEncryptionKeyFormatErrors,
   getMissingEnvVars,
 } from "../env"
 
@@ -16,6 +18,7 @@ const completeEnv = (overrides: Record<string, string> = {}): NodeJS.ProcessEnv 
   JWT_SECRET: "secret",
   COOKIE_SECRET: "secret",
   AUTH_MFA_ENCRYPTION_KEY: "a".repeat(64),
+  PAYMENT_CONFIG_ENCRYPTION_KEY: "a".repeat(64),
   ...overrides,
 })
 
@@ -79,30 +82,39 @@ describe("getMissingEnvVars", () => {
     expect(getMissingEnvVars(env)).toEqual([])
   })
 
-  it("does not require Stripe variables when PAYMENT_PROVIDER is unset", () => {
+  it("requires PAYMENT_CONFIG_ENCRYPTION_KEY for secret encryption at rest", () => {
+    const { PAYMENT_CONFIG_ENCRYPTION_KEY, ...env } = completeEnv()
+    expect(getMissingEnvVars(env)).toEqual(["PAYMENT_CONFIG_ENCRYPTION_KEY"])
+  })
+
+  it("does not require Stripe credentials when PAYMENT_PROVIDER is unset", () => {
     const env = completeEnv()
     expect(getMissingEnvVars(env)).toEqual([])
-    for (const key of STRIPE_REQUIRED_ENV_VARS) {
+    for (const key of LEGACY_STRIPE_ENV_VARS) {
       expect(env[key]).toBeUndefined()
     }
   })
 
-  it("requires the full Stripe variable set when PAYMENT_PROVIDER is stripe", () => {
+  it("does not require Stripe credentials when PAYMENT_PROVIDER is stripe (Admin-managed)", () => {
     const env = completeEnv({ PAYMENT_PROVIDER: "stripe" })
-    expect(getMissingEnvVars(env)).toEqual([...STRIPE_REQUIRED_ENV_VARS].sort())
-  })
-
-  it("reports only the absent Stripe variables when PAYMENT_PROVIDER is stripe", () => {
-    const env = completeEnv({
-      PAYMENT_PROVIDER: "stripe",
-      STRIPE_SECRET_KEY: "sk_test_secret",
-      STRIPE_WEBHOOK_SECRET: "whsec_test",
-    })
     expect(getMissingEnvVars(env)).toEqual([])
   })
 
-  it("does not require Stripe variables for any other PAYMENT_PROVIDER value", () => {
-    const env = completeEnv({ PAYMENT_PROVIDER: "assanpay" })
+  it("does not require Safepay credentials when PAYMENT_PROVIDER is safepay (Admin-managed)", () => {
+    const env = completeEnv({ PAYMENT_PROVIDER: "safepay" })
+    expect(getMissingEnvVars(env)).toEqual([])
+    for (const key of LEGACY_SAFEPAY_ENV_VARS) {
+      expect(env[key]).toBeUndefined()
+    }
+  })
+
+  it("requires no provider credentials for the full PK+AE topology (Admin-managed)", () => {
+    const env = completeEnv({ PAYMENT_PROVIDER: "safepay,stripe" })
+    expect(getMissingEnvVars(env)).toEqual([])
+  })
+
+  it("tolerates whitespace around comma-separated PAYMENT_PROVIDER values", () => {
+    const env = completeEnv({ PAYMENT_PROVIDER: " safepay , stripe " })
     expect(getMissingEnvVars(env)).toEqual([])
   })
 
@@ -137,9 +149,43 @@ describe("getMissingEnvVars", () => {
   })
 })
 
+describe("getEncryptionKeyFormatErrors", () => {
+  it("accepts a 64-char hex key", () => {
+    expect(getEncryptionKeyFormatErrors(completeEnv())).toEqual([])
+  })
+
+  it("accepts uppercase hex", () => {
+    const env = completeEnv({ PAYMENT_CONFIG_ENCRYPTION_KEY: "A".repeat(64) })
+    expect(getEncryptionKeyFormatErrors(env)).toEqual([])
+  })
+
+  it("reports a wrong-length key", () => {
+    const env = completeEnv({ PAYMENT_CONFIG_ENCRYPTION_KEY: "abcd" })
+    const errors = getEncryptionKeyFormatErrors(env)
+    expect(errors.length).toBe(1)
+    expect(errors[0]).toContain("64-character hex")
+  })
+
+  it("reports a non-hex key", () => {
+    const env = completeEnv({ PAYMENT_CONFIG_ENCRYPTION_KEY: "z".repeat(64) })
+    expect(getEncryptionKeyFormatErrors(env).length).toBe(1)
+  })
+
+  it("returns no errors when the key is absent (presence handled elsewhere)", () => {
+    const { PAYMENT_CONFIG_ENCRYPTION_KEY, ...env } = completeEnv()
+    expect(getEncryptionKeyFormatErrors(env)).toEqual([])
+  })
+})
+
 describe("assertEnv", () => {
   it("does not throw when the environment is complete", () => {
     expect(() => assertEnv(completeEnv())).not.toThrow()
+  })
+
+  it("throws a descriptive error for an invalid encryption key format", () => {
+    const env = completeEnv({ PAYMENT_CONFIG_ENCRYPTION_KEY: "too-short" })
+    expect(() => assertEnv(env)).toThrow("64-character hex")
+    expect(() => assertEnv(env)).not.toThrow("too-short") // value never echoed
   })
 
   it("throws a descriptive error naming every missing variable", () => {

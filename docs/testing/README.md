@@ -29,16 +29,17 @@ end-to-end:
   creates `medusa-<name>-integration-<worker>` databases, migrates them, and
   drops them on cleanup.
 
-Run results (2026-08-16, after Markets & Pricing, Inventory & Warehouses, Media/Storage, Catalog & Categories, Browsing/Search, the Foundation env-validation module, the Inventory low-stock trigger, Cart & Checkout ownership enforcement, the Payments native-pipeline suite, and the Shipping & Fulfillment per-market topology suite; 2026-08-17 after the Redis modules and the Customer Authentication phase; 2026-08-17 after the Cart & Checkout foundation phase — see the suite sections below for per-suite docs):
+Run results (2026-08-18, after Safepay/Stripe sandbox verification and the
+integration-suite fixes):
 
 ```text
-pnpm --filter @dtc/backend test:unit            → PASS (85/85: browse helpers 37 + env-config validation 21 + medusa-config wiring 10 [5 auth + 5 Redis modules] + low-stock helper 10 + cart-ownership helper 7)
-pnpm --filter @dtc/backend test:integration:http → PASS (114 tests: health 1 + markets 7 + inventory 12 + storage 7 + catalog 10 + browsing 35 + cart-ownership 8 + customer-auth 9 + payments 6 + shipping 6 + checkout 13; ~7 min — run with `--testTimeout=180000` because a fresh-schema boot runs the full core migration set; STOP the local `medusa develop`/`pnpm dev` server first — its in-process BullMQ workers share the `events-queue`/workflow queues with the harness and cause `waitForEvent`-style timeouts)
+pnpm --filter @dtc/backend test:unit            → PASS (214/214: browse helpers 37 + env-config validation 44 + medusa-config wiring 10 [5 auth + 5 Redis modules] + low-stock helper 10 + cart-ownership helper 7 + payment-config encryption 13 + payment-config utils 16 + Stripe runtime wrapper 14 + Safepay runtime config 9 + admin payment-config helpers 8 + Safepay adapter 54)
+pnpm --filter @dtc/backend test:integration:http → PASS (127 tests / 12 suites: health 1 + markets 7 + inventory 12 + storage 7 + catalog 10 + browsing 35 + cart-ownership 8 + customer-auth 9 + payments 6 + shipping 6 + checkout 13 + payment-provider-config 13; run with `--forceExit` — STOP the local `medusa develop`/`pnpm dev` server first — its in-process BullMQ workers share the `events-queue`/workflow queues with the harness and cause `waitForEvent`-style timeouts)
 pnpm --filter @dtc/backend lint                 → PASS
 pnpm --filter @dtc/backend build                → PASS
 pnpm --filter @dtc/storefront lint              → PASS (0 errors, 3 pre-existing warnings)
-pnpm --filter @dtc/storefront test              → PASS (136 tests / 18 suites; +12 checkout-validation BD-C-05/06)
-pnpm --filter @dtc/storefront build             → PASS (requires the dev backend running — the sitemap route fetches the live catalog)
+pnpm --filter @dtc/storefront test              → PASS (136 tests / 18 suites)
+pnpm --filter @dtc/storefront build             → PASS (requires the dev backend running — the sitemap route fetches the live catalog; clear .next cache if stale region IDs persist)
 ```
 
 ### Customer authentication integration suite (`customer-auth.spec.ts`)

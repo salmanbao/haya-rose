@@ -4,14 +4,14 @@
 >
 > **xPay is NO LONGER the approved Pakistan payment provider.**
 >
-> - **Status: REPLACED BY ASSANPAY** (2026-08-16) — provider replacement
->   requested before implementation. See
->   `docs/architecture/provider-verification/assanpay-verification.md` for the
->   current Pakistan provider verification.
+> - **Status: REPLACED** (2026-08-16 — replaced by AssanPay; AssanPay was in
+>   turn **replaced by Safepay** on 2026-08-17, also before implementation).
+>   See `docs/architecture/provider-verification/safepay-verification.md` for
+>   the current Pakistan provider verification and the implemented adapter.
 > - This document is preserved as **historical verification evidence only**.
 >   It must not be cited as the active Pakistan provider contract.
-> - The approved Pakistan provider is **AssanPay (PKR)**; the UAE provider
->   remains **Stripe (AED)** (unchanged).
+> - The approved V1 provider topology is **Safepay (PKR)** for Pakistan and
+>   **Stripe (AED)** for the UAE (unchanged).
 
 **Historical verification status (at time of replacement):** PARTIALLY VERIFIED —
 core payment lifecycle verified against official documentation; **webhook

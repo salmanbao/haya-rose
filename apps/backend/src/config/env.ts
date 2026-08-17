@@ -25,6 +25,11 @@ export const REQUIRED_ENV_VARS = [
   "JWT_SECRET",
   "COOKIE_SECRET",
   "AUTH_MFA_ENCRYPTION_KEY",
+  // Master key for AES-256-GCM encryption of Admin-managed payment-provider
+  // secrets at rest (payment-config module). Provider credentials themselves
+  // are managed through the Admin UI — only this key stays in the
+  // environment (approved architecture 2026-08-17).
+  "PAYMENT_CONFIG_ENCRYPTION_KEY",
 ] as const
 
 /**
@@ -41,16 +46,33 @@ export const S3_REQUIRED_ENV_VARS = [
 ] as const
 
 /**
- * Variables required when the Stripe payment provider (UAE/AED) is enabled
- * via `PAYMENT_PROVIDER=stripe` in `medusa-config.ts`.
- *
- * Names only — values stay in the environment. `STRIPE_PUBLISHABLE_KEY` is
- * intentionally server-side config here (it is a publishable, non-secret
- * value); the storefront reads its own copy from the storefront env.
+ * TRANSITIONAL legacy Stripe provider variables (approved architecture
+ * 2026-08-17): provider credentials are now managed through the Admin UI
+ * (payment-config module, encrypted at rest) — they are NOT required for
+ * boot anymore. These names remain supported as a bootstrap/backward-
+ * compatibility fallback with an explicit precedence:
+ *   Admin-managed configuration > legacy environment configuration
+ * See docs/specifications/payments.md (Admin-managed provider configuration).
+ * `STRIPE_PUBLISHABLE_KEY` is non-secret client config; the storefront reads
+ * its own copy from its env.
  */
-export const STRIPE_REQUIRED_ENV_VARS = [
+export const LEGACY_STRIPE_ENV_VARS = [
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
+] as const
+
+/**
+ * TRANSITIONAL legacy Safepay provider variables — same migration policy as
+ * LEGACY_STRIPE_ENV_VARS. Names map to the verified Safepay contract
+ * (docs/architecture/provider-verification/safepay-verification.md).
+ */
+export const LEGACY_SAFEPAY_ENV_VARS = [
+  "SAFEPAY_MERCHANT_API_KEY",
+  "SAFEPAY_SECRET_KEY",
+  "SAFEPAY_WEBHOOK_SECRET",
+  "SAFEPAY_ENVIRONMENT",
+  "SAFEPAY_REDIRECT_URL",
+  "SAFEPAY_CANCEL_URL",
 ] as const
 
 /**
@@ -80,15 +102,38 @@ export function getMissingEnvVars(
     missing.push(...S3_REQUIRED_ENV_VARS.filter((key) => !env[key]))
   }
 
-  if (env.PAYMENT_PROVIDER === "stripe") {
-    missing.push(...STRIPE_REQUIRED_ENV_VARS.filter((key) => !env[key]))
-  }
+  // PAYMENT_PROVIDER still selects which providers are REGISTERED in
+  // medusa-config.ts (infrastructure choice). Provider credentials are no
+  // longer required in the environment — they are managed through the Admin
+  // UI (payment-config module). Legacy env variables remain supported as a
+  // transitional fallback only (precedence: Admin config > legacy env).
 
   if (env.AUTH_GOOGLE_ENABLED === "true") {
     missing.push(...GOOGLE_AUTH_REQUIRED_ENV_VARS.filter((key) => !env[key]))
   }
 
   return missing.sort()
+}
+
+/**
+ * Returns format problems for PAYMENT_CONFIG_ENCRYPTION_KEY (never the value
+ * itself). The key must be a 64-character hex string (32 bytes) for
+ * AES-256-GCM. Empty list = valid.
+ */
+export function getEncryptionKeyFormatErrors(
+  env: NodeJS.ProcessEnv = process.env
+): string[] {
+  const value = env.PAYMENT_CONFIG_ENCRYPTION_KEY
+  if (!value) {
+    return [] // absence is reported by getMissingEnvVars
+  }
+  if (value.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(value)) {
+    return [
+      "PAYMENT_CONFIG_ENCRYPTION_KEY must be a 64-character hex string (32 " +
+        "bytes) for AES-256-GCM. Generate one with: openssl rand -hex 32",
+    ]
+  }
+  return []
 }
 
 /**
@@ -103,6 +148,14 @@ export function assertEnv(env: NodeJS.ProcessEnv = process.env): void {
       `Missing required environment variables: ${missing.join(", ")}. ` +
         `Set them in apps/backend/.env (see .env.example) or the deployment ` +
         `environment before starting the backend.`
+    )
+  }
+
+  const formatErrors = getEncryptionKeyFormatErrors(env)
+  if (formatErrors.length > 0) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      formatErrors.join(" ")
     )
   }
 }

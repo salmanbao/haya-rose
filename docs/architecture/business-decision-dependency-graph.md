@@ -88,7 +88,7 @@ status, and dependencies.
 
 | Canonical ID | Source IDs | Decision | Type | Blocking | Status | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| BD-P-01 | B-PAY-01 | Pakistan payment provider | BUSINESS/PROVIDER | P0 | **APPROVED (selection: AssanPay)** — replaces earlier xPay selection (provider replacement requested before implementation); contract verification per `docs/architecture/provider-verification/assanpay-verification.md` | BD-M-01 |
+| BD-P-01 | B-PAY-01 | Pakistan payment provider | BUSINESS/PROVIDER | P0 | **APPROVED (selection: Safepay, revised 2026-08-17)** — replaces earlier AssanPay selection (which replaced xPay; both replaced before implementation); contract verified + adapter implemented per `docs/architecture/provider-verification/safepay-verification.md` | BD-M-01 |
 | BD-P-02 | B-PAY-02 | UAE payment provider | BUSINESS/PROVIDER | P0 | **APPROVED (selection: Stripe)** — contract verification pending | BD-M-01 |
 | BD-P-03 | B-PAY-03, B-MP-12, B-CC-14, B-SHIP-06, B-ORD-12 | COD policy (PK? AE? scope; Medusa representation) | BUSINESS | P0 | **APPROVED** (no COD in V1) | BD-P-01, BD-P-02 |
 | BD-P-04 | B-PAY-04, B-PAY-12 | Supported payment methods per market | BUSINESS | P1 | PROVIDER_VERIFICATION_REQUIRED (method set per provider) | BD-P-01, BD-P-02 |
@@ -422,6 +422,6 @@ RET §35) and gated.
 (BD-M-01 → BD-P-01/02 → BD-P-03 → BD-M-02 → BD-G-01/BD-O-01 → BD-R-05 →
 BD-R-01/02/03 → BD-S-01 → BD-I-01 → BD-I-02 → BD-M-04 → BD-M-08 →
 BD-O-02 → Part B).** Remaining implementation gates (not decisions): PK GST
-numeric rate, AE VAT numeric rate, provider contract verification (AssanPay,
+numeric rate, AE VAT numeric rate, provider sandbox verification (Safepay,
 Stripe; TCS/Aramex at shipping stage). Business-decision resolution is
 COMPLETE.

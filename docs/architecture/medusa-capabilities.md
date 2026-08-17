@@ -31,7 +31,7 @@ verification during initialization.
 | Authentication | ENABLED | auth module; email/password provider enabled (`/auth/user/emailpass`) |
 | Google auth provider | AVAILABLE, NOT ENABLED | `@medusajs/auth-google` installed; requires config (V1 requirement) |
 | Orders | ENABLED | order module + workflows |
-| Payments | ENABLED (module) | payment module; Stripe provider INSTALLED but NOT ENABLED (providers SELECTED: AssanPay PK — replaces earlier xPay —, Stripe AE; AssanPay contract verification in progress, Stripe verified) |
+| Payments | ENABLED (module) | payment module; providers SELECTED+IMPLEMENTED: Safepay PK (custom adapter `src/modules/payment-safepay`, replaces earlier AssanPay/xPay selections) and Stripe AE (bundled provider) — both env-gated via `PAYMENT_PROVIDER`, contracts verified, sandbox runs pending |
 | Fulfillment | ENABLED | fulfillment module; manual provider available |
 | Inventory | ENABLED | inventory module (`inventory_*` tables present) |
 | Stock locations | ENABLED | stock-location module (multi-warehouse foundation) |

@@ -91,6 +91,27 @@ cd apps/backend
 pnpm exec medusa db:migrate:scripts   # runs only pending scripts (tracked in script_migrations)
 ```
 
+### Payment provider credentials (Admin-managed)
+
+Since 2026-08-17 provider credentials are managed through the **Medusa Admin
+UI** (Settings → Payment Providers), NOT `.env` — they are stored encrypted
+at rest in PostgreSQL (`payment_provider_config`) by the `payment-config`
+module. The backend environment only carries the master encryption key:
+
+```bash
+# Required — 64 hex chars (32 bytes) for AES-256-GCM:
+#   openssl rand -hex 32
+PAYMENT_CONFIG_ENCRYPTION_KEY=
+```
+
+`PAYMENT_PROVIDER` still selects which providers are registered (e.g.
+`safepay,stripe`). Once the backend is running, open
+`http://localhost:9000/app/settings/payment-providers`, enter the credentials,
+choose the environment (sandbox/test), and click **Test connection** before
+enabling the provider. The legacy `SAFEPAY_*` / `STRIPE_*` variables remain
+supported as a TRANSITIONAL fallback only (precedence: Admin config > legacy
+env).
+
 - `initial-data-seed.ts` — starter catalog/regions (Europe/eur, demo products,
   variants, prices). **Not idempotent** — it runs once; already recorded.
 - `seed-markets.ts` — Pakistan (pkr) and UAE (aed) regions, PK/AE tax regions

@@ -1,0 +1,21 @@
+- main [ref=f18e2]:
+  - main [ref=f18e3]:
+    - generic [ref=f18e4]:
+      - heading "Medusa Store" [level=1] [ref=f18e5]
+      - paragraph [ref=f18e6]: Select your market to continue
+      - generic [ref=f18e7]: Based on your location, you appear to be in Pakistan.You can choose either market — this is just a suggestion.
+      - list [ref=f18e8]:
+        - listitem [ref=f18e9]:
+          - link "United Arab Emirates aed →" [ref=f18e10] [cursor=pointer]:
+            - /url: /ae
+            - generic [ref=f18e13]:
+              - generic [ref=f18e14]: United Arab Emirates
+              - generic [ref=f18e15]: aed
+            - generic [ref=f18e16]: →
+        - listitem [ref=f18e17]:
+          - link "Pakistan pkr →" [ref=f18e18] [cursor=pointer]:
+            - /url: /pk
+            - generic [ref=f18e21]:
+              - generic [ref=f18e22]: Pakistan
+              - generic [ref=f18e23]: pkr
+            - generic [ref=f18e24]: →

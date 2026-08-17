@@ -38,12 +38,27 @@ const loadConfig = () => {
         options?: {
           redisUrl?: string
           redis?: { redisUrl?: string }
-          providers?: Array<{ resolve?: string; id?: string; options?: unknown }>
+          providers?: Array<{
+            resolve?: string
+            id?: string
+            options?: Record<string, unknown>
+          }>
         }
       }
     >
   }
 }
+
+type PaymentProviderRegistration = {
+  resolve?: string
+  id?: string
+  options?: Record<string, unknown>
+}
+
+const paymentProvidersOf = (
+  config: ReturnType<typeof loadConfig>
+): PaymentProviderRegistration[] =>
+  config.modules[Modules.PAYMENT]?.options?.providers ?? []
 
 describe("medusa-config customer authentication wiring (BD-AUTH-01..03)", () => {
   const originalEnv = { ...process.env }
@@ -105,6 +120,142 @@ describe("medusa-config customer authentication wiring (BD-AUTH-01..03)", () => 
     expect(config.projectConfig.http.authVerificationsPerActor).toEqual({
       customer: [{ entity_type: "email", auth_provider: "emailpass" }],
     })
+  })
+})
+
+describe("medusa-config payment provider wiring (Safepay PK + Stripe AE)", () => {
+  const PAYMENT_GATE_KEYS = [
+    "PAYMENT_PROVIDER",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "PAYMENT_STRIPE_CAPTURE",
+    "SAFEPAY_MERCHANT_API_KEY",
+    "SAFEPAY_SECRET_KEY",
+    "SAFEPAY_WEBHOOK_SECRET",
+    "SAFEPAY_ENVIRONMENT",
+    "SAFEPAY_REDIRECT_URL",
+    "SAFEPAY_CANCEL_URL",
+  ] as const
+
+  const originalEnv = { ...process.env }
+
+  const setPaymentEnv = (overrides: Record<string, string>) => {
+    for (const key of PAYMENT_GATE_KEYS) {
+      delete process.env[key]
+    }
+    Object.assign(process.env, overrides)
+  }
+
+  afterEach(() => {
+    for (const key of PAYMENT_GATE_KEYS) {
+      if (key in originalEnv) {
+        process.env[key] = originalEnv[key]
+      } else {
+        delete process.env[key]
+      }
+    }
+  })
+
+  it("registers the payment module with no providers when PAYMENT_PROVIDER is empty/unset (native default module)", () => {
+    // medusa-config calls loadEnv(), which repopulates unset variables from
+    // .env (the dev .env now sets PAYMENT_PROVIDER). An explicitly empty gate
+    // behaves identically to an unset one: no gateway providers attached.
+    setPaymentEnv({ PAYMENT_PROVIDER: "" })
+    const config = loadConfig()
+    const paymentModule = config.modules[Modules.PAYMENT]
+    // defineConfig always registers a default payment module; the gate
+    // controls whether gateway providers are attached to it.
+    expect(paymentModule).toBeDefined()
+    expect(paymentProvidersOf(config)).toEqual([])
+  })
+
+  it("registers the local Safepay provider with the SAFEPAY_* options", () => {
+    setPaymentEnv({
+      PAYMENT_PROVIDER: "safepay",
+      SAFEPAY_MERCHANT_API_KEY: "sec_merchant",
+      SAFEPAY_SECRET_KEY: "sk_secret",
+      SAFEPAY_WEBHOOK_SECRET: "whsec_secret",
+      SAFEPAY_ENVIRONMENT: "production",
+      SAFEPAY_REDIRECT_URL: "https://storefront.test/payment/safepay",
+      SAFEPAY_CANCEL_URL: "https://storefront.test/checkout",
+    })
+    const config = loadConfig()
+    const providers = paymentProvidersOf(config)
+    expect(providers).toHaveLength(1)
+    expect(providers[0]).toEqual({
+      resolve: "./src/modules/payment-safepay",
+      id: "safepay",
+      options: {
+        merchantApiKey: "sec_merchant",
+        secretKey: "sk_secret",
+        webhookSecret: "whsec_secret",
+        environment: "production",
+        redirectUrl: "https://storefront.test/payment/safepay",
+        cancelUrl: "https://storefront.test/checkout",
+      },
+    })
+  })
+
+  it("defaults the Safepay environment to sandbox when unset", () => {
+    setPaymentEnv({
+      PAYMENT_PROVIDER: "safepay",
+      SAFEPAY_MERCHANT_API_KEY: "sec_merchant",
+      SAFEPAY_SECRET_KEY: "sk_secret",
+      SAFEPAY_WEBHOOK_SECRET: "whsec_secret",
+      SAFEPAY_REDIRECT_URL: "https://storefront.test/payment/safepay",
+      SAFEPAY_CANCEL_URL: "https://storefront.test/checkout",
+    })
+    const config = loadConfig()
+    expect(paymentProvidersOf(config)[0]!.options!.environment).toBe("sandbox")
+  })
+
+  it("registers both providers for the full PK+AE topology", () => {
+    setPaymentEnv({
+      PAYMENT_PROVIDER: "safepay,stripe",
+      SAFEPAY_MERCHANT_API_KEY: "sec_merchant",
+      SAFEPAY_SECRET_KEY: "sk_secret",
+      SAFEPAY_WEBHOOK_SECRET: "whsec_secret",
+      SAFEPAY_REDIRECT_URL: "https://storefront.test/payment/safepay",
+      SAFEPAY_CANCEL_URL: "https://storefront.test/checkout",
+      STRIPE_SECRET_KEY: "sk_test_stripe",
+      STRIPE_WEBHOOK_SECRET: "whsec_stripe",
+    })
+    const config = loadConfig()
+    const providers = paymentProvidersOf(config)
+    expect(providers.map((p) => p.id)).toEqual(["stripe", "safepay"])
+    expect(
+      providers.find((p) => p.id === "stripe")!.options
+    ).toEqual({
+      apiKey: "sk_test_stripe",
+      webhookSecret: "whsec_stripe",
+      capture: false,
+    })
+    // The payment module declares payment_config as a dependency so provider
+    // services can resolve the Admin-managed runtime configuration from the
+    // module's local container (verified against modules-sdk load-internal).
+    const paymentModule = config.modules[Modules.PAYMENT] as {
+      dependencies?: string[]
+    }
+    expect(paymentModule.dependencies).toContain("payment_config")
+  })
+
+  it("keeps Stripe capture manual by default and automatic when configured", () => {
+    setPaymentEnv({
+      PAYMENT_PROVIDER: "stripe",
+      STRIPE_SECRET_KEY: "sk_test_stripe",
+      STRIPE_WEBHOOK_SECRET: "whsec_stripe",
+    })
+    const config = loadConfig()
+    expect(paymentProvidersOf(config)[0]!.options!.capture).toBe(false)
+
+    setPaymentEnv({
+      PAYMENT_PROVIDER: "stripe",
+      STRIPE_SECRET_KEY: "sk_test_stripe",
+      STRIPE_WEBHOOK_SECRET: "whsec_stripe",
+      PAYMENT_STRIPE_CAPTURE: "automatic",
+    })
+    const configAutomatic = loadConfig()
+    expect(paymentProvidersOf(configAutomatic)[0]!.options!.capture).toBe(true)
   })
 })
 

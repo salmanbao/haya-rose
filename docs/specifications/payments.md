@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Define the complete payments domain for the Pakistan + UAE B2C baby-clothing platform: payment collections/sessions, lifecycle (initiation → authorization → capture → settlement → refund → reconciliation), market/provider mapping, provider boundary, webhooks, idempotency, concurrency, security, admin, testing, and invariants — implementation-ready, with **no provider contracts invented** and **no business rules invented**. Provider selections (APPROVED 2026-08-16, later revised): **Pakistan = AssanPay (PKR)**, **UAE = Stripe (AED)** — contracts verified in `docs/architecture/provider-verification/`; no adapter is implemented.
+Define the complete payments domain for the Pakistan + UAE B2C baby-clothing platform: payment collections/sessions, lifecycle (initiation → authorization → capture → settlement → refund → reconciliation), market/provider mapping, provider boundary, webhooks, idempotency, concurrency, security, admin, testing, and invariants — implementation-ready, with **no provider contracts invented** and **no business rules invented**. Provider selections (APPROVED, revised 2026-08-17): **Pakistan = Safepay (PKR)** (replaces AssanPay, which replaced xPay — both historical/not active), **UAE = Stripe (AED)** — contracts verified and adapters implemented in `docs/architecture/provider-verification/` + `apps/backend/src/modules/payment-safepay`.
 
 This document is **specification-only**. It changes no source code, configuration, dependencies, database schema, storefront, or Admin implementation.
 
@@ -122,7 +122,7 @@ The module exposes account-holder + payment-method workflows/APIs (`account_hold
 | Refund ≤ captured guard | ✅ workflow step + module service | — | none | — |
 | Idempotency keys to providers | ✅ (`session.id`, `capture.id`, `refund.id`, `payment.id`) | — | none | — |
 | Webhook listener route + event + subscriber + processing workflow | ✅ `/hooks/payment/:provider` → `payment.webhook_received` → subscriber → `processPaymentWorkflow` | `webhook_delay`/`webhook_retries` | per-provider signature verification inside the provider's `getWebhookActionAndData` (provider responsibility) | provider webhook delivery |
-| Payment gateway (PK/UAE) | — | — | — | **SELECTED: AssanPay (PK) / Stripe (AE)** — no adapter implemented; contract verification per `docs/architecture/provider-verification/` |
+| Payment gateway (PK/UAE) | — | — | — | **IMPLEMENTED: Safepay (PK, custom IPaymentProvider adapter) / Stripe (AE, bundled provider)** — contracts verified per `docs/architecture/provider-verification/`; sandbox runs pending |
 | Reconciliation | Native aggregate fields; no reconciliation job ships | — | scheduled reconciliation job (T-PAY-05) | provider status/settlement data |
 | Payment provider capability discovery | — | — | per-provider verification against official docs (REQ-PAY-026) | provider docs |
 
@@ -137,7 +137,7 @@ Medusa v2.19.0 (VPS)
    ├── Admin: /admin/payments… · /admin/payment-collections… (RBAC policies)
    ├── Webhook: POST /hooks/payment/:provider (native) → payment.webhook_received → subscriber → processPaymentWorkflow
    └── IPaymentProvider boundary (payments/ integration layer)
-         ├── Pakistan → AssanPay (PKR)      [SELECTED — contract verification in progress]
+         ├── Pakistan → Safepay (PKR)       [IMPLEMENTED — contract verified, sandbox pending]
          └── UAE → Stripe (AED)              [SELECTED — contract verified]
 PostgreSQL (authoritative payment state) · Redis (non-authoritative: locking/event-bus/cache only)
 ```
@@ -148,7 +148,7 @@ PostgreSQL (authoritative payment state) · Redis (non-authoritative: locking/ev
 
 ## 7. Market and Provider Model
 
-- **Pakistan:** PKR; provider **AssanPay** (APPROVED selection, BD-P-01; contract verification per `docs/architecture/provider-verification/`); eligibility Pakistan-only unless explicitly configured. **UAE:** AED; provider **Stripe** (APPROVED selection, BD-P-02; contract verified); eligibility UAE-only unless explicitly configured.
+- **Pakistan:** PKR; provider **Safepay** (APPROVED selection, BD-P-01 revised 2026-08-17 — replaces AssanPay; contract verified + adapter implemented per `docs/architecture/provider-verification/safepay-verification.md`); eligibility Pakistan-only unless explicitly configured. **UAE:** AED; provider **Stripe** (APPROVED selection, BD-P-02; contract verified); eligibility UAE-only unless explicitly configured.
 - **Native market binding (verified):** `region_payment_provider` link + region-scoped `GET /store/payment-providers` (requires `region_id`). Configuration must bind PK region → PK providers and AE region → AE providers.
 - **Prevention (REQ-PAY-003):** PKR payment against AED cart, wrong-provider-for-market, cross-market leakage, and silent currency conversion are prevented when (a) collection currency derives from cart/order currency (verified: collection `currency_code` mirrors cart), and (b) provider eligibility is region-scoped. Payment amount + currency validated server-side at every boundary (REQ-PAY-001/002).
 - Region↔provider registration mechanics: configuration via Admin/medusa-config; technical decision T-PAY-02.
@@ -384,7 +384,7 @@ Decision Phase. Canonical mapping per
 
 | ID | Business decision | Why required | Options | Recommended | Status | Canonical |
 | --- | --- | --- | --- | --- | --- | --- |
-| B-PAY-01 | Pakistan payment provider(s) | Not selected | — | — | **APPROVED (selection: AssanPay)** — replaces the earlier xPay selection (provider replacement requested before implementation); contract verification per `docs/architecture/provider-verification/assanpay-verification.md` | BD-P-01 |
+| B-PAY-01 | Pakistan payment provider(s) | Not selected | — | — | **APPROVED (selection: Safepay, revised 2026-08-17)** — replaces the earlier AssanPay selection (which replaced xPay; both replaced before implementation, historical evidence preserved); contract verified + adapter implemented per `docs/architecture/provider-verification/safepay-verification.md` | BD-P-01 |
 | B-PAY-02 | UAE payment provider(s) | Not selected | — | — | **APPROVED (selection: Stripe)** — contract verification pending | BD-P-02 |
 | B-PAY-03 | COD (PK? AE? scope; Medusa representation; cancellation/return/refund behavior) | Explicitly unresolved | — | — | **APPROVED — no COD in V1** | BD-P-03 |
 | B-PAY-04 | Supported payment methods (cards/wallets/bank transfer/installments; saved methods) | Provider + business scope | — | Card + provider-default; others per provider | **PROVIDER_VERIFICATION_REQUIRED** | BD-P-04 |
@@ -420,7 +420,7 @@ Decision Phase. Canonical mapping per
 
 ## 26. Provider Contract Register
 
-For each provider (PK = AssanPay, AE = Stripe) — **verified facts are recorded in `docs/architecture/provider-verification/`** (`assanpay-verification.md`, `stripe-verification.md`, `payment-provider-compatibility.md`). Fields not yet established by official documentation remain UNVERIFIED / TBD:
+For each provider (PK = Safepay, AE = Stripe) — **verified facts are recorded in `docs/architecture/provider-verification/`** (`safepay-verification.md`, `stripe-verification.md`, `payment-provider-compatibility.md`; `assanpay-verification.md` and `xpay-verification.md` are HISTORICAL/REPLACED). Fields not yet established by official documentation remain UNVERIFIED / TBD:
 
 `provider name` · official documentation URL · API version · supported currencies · supported payment methods · authorization · capture · partial capture · refund · partial refund · cancellation · webhook support · signature verification · status lookup · idempotency support · sandbox availability · rate limits · error model · settlement/reconciliation · PCI/tokenization model.
 
@@ -479,9 +479,9 @@ Groups: A. Scope · B. Medusa capability · C. Market/provider mapping · D. Pay
 
 ## 29. Open Questions
 
-- Provider selection (B-PAY-01/02) — **APPROVED: AssanPay (PK), Stripe (AE)**. Payment implementation remains **BLOCKED_PENDING_PROVIDER_VERIFICATION** on AssanPay webhook/refund/auth contract details (see `docs/architecture/provider-verification/`).
+- Provider selection (B-PAY-01/02) — **APPROVED: Safepay (PK, revised), Stripe (AE)**. Both contracts verified; adapters implemented. Remaining gate: sandbox contract runs before enabling for customers (COMPLETE_PENDING_SANDBOX).
 - COD (B-PAY-03) — **APPROVED: no COD in V1** (BD-P-03).
-- Provider webhook support and signature mechanisms — contract verification (AssanPay UNVERIFIED; Stripe VERIFIED).
+- Provider webhook support and signature mechanisms — **VERIFIED both** (Safepay: X-SFPY-SIGNATURE HMAC-SHA512; Stripe: Stripe-Signature HMAC-SHA256).
 - Session expiry/refresh policy (B-PAY-06/T-PAY-03).
 - Reconciliation cadence and settlement data availability (B-PAY-16/T-PAY-05).
 - Webhook event processing options (`webhook_delay`/`webhook_retries`) tuning — implementation-time configuration.
@@ -530,7 +530,107 @@ Phase 5 (Payments) implemented scope — **PARTIAL by design**:
 
 - **Native pipeline verified + exercised (T-PAY-04):** `integration-tests/http/payments.spec.ts` (6 tests) proves: region-scoped store provider listing via `region_payment_provider` (REQ-PAY-003); collection + single-authoritative-session creation (REQ-PAY-004/030); authorize-at-completion order-first flow — payment authorized, zero captures/refunds (REQ-PAY-006); capture succeeds once and a duplicate full capture is idempotent success with no second capture record (REQ-PAY-010/031; native `captured_at` guard + row-lock concurrency guard verified); refund ≤ captured enforced, over-refund rejected (REQ-PAY-011); native webhook pipeline `POST /hooks/payment/:provider` → `payment.webhook_received` (5000ms delay, 3 attempts) → shipped subscriber → `processPaymentWorkflow` (REQ-PAY-027; system provider maps to `not_supported`, no state mutation).
 - **Stripe (UAE/AED) scaffolding (BD-P-02):** `@medusajs/payment-stripe@2.19.0` added (official Medusa provider, exact locked version); env-gated registration in `medusa-config.ts` (`PAYMENT_PROVIDER=stripe` → provider key `pp_stripe_stripe`, verified `pp_{identifier}_{id}`); `capture` defaults to manual (deferred) per T-PAY-03, overridable via `PAYMENT_STRIPE_CAPTURE=automatic`; conditional env validation in `src/config/env.ts` (names only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`); `.env.example` updated; `seed-markets.ts` binds Stripe to the AE region when registered (T-PAY-02). `STRIPE_PUBLISHABLE_KEY` documented (storefront reads its own copy).
-- **AssanPay (PK/PKR) — NOT implemented: BLOCKED_PENDING_PROVIDER_VERIFICATION.** Hard gates from `docs/architecture/provider-verification/assanpay-verification.md`: exact API authentication, webhook payload/signature contract, refund API, base URLs, status vocabulary, capture/cancel semantics, 3DS. No adapter, no fake adapter, no invented endpoints. The PK region gets no provider binding until the contract is verified.
-- **xPay:** replaced provider (BD-P-01); not registered, no references reactivated.
+- **Safepay (PK/PKR) — IMPLEMENTED (2026-08-17; replaces AssanPay per BD-P-01 revision); SANDBOX-VERIFIED 2026-08-18.** Contract verified against official Safepay documentation (retrieved via Context7) + official SDK source: tracker sessions (`POST /order/payments/v3/`), hosted checkout URL (passport `tbt`), reporter status API, full/partial refunds, webhooks (X-SFPY-SIGNATURE, HMAC-SHA512 over raw body), paisa amounts, `x-sfpy-merchant-secret` auth. Adapter at `src/modules/payment-safepay` (provider key `pp_safepay_safepay`), env-gated via `PAYMENT_PROVIDER=safepay` with fail-fast env validation; PK region binding seeded; 54 unit tests. Live sandbox evidence: session creation (metadata must be `order_id` — sandbox rejects unknown meta keys), hosted checkout payment (frictionless card 4456 5300 0000 1005), deferred authorization (TRACKER_STARTED → PENDING_AUTHORIZATION), capture, refund (TRACKER_REFUNDED), signed webhook pipeline (bad signature rejected; replay idempotent). SANDBOX_LIMITATIONs (non-blocking): no webhook auto-delivery from the sandbox; decline-card simulation unavailable. Known documented limitations (non-blocking): no idempotency mechanism (financial ops single-attempt), no signature timestamp (native duplicate-delivery determinism), no un-paid-tracker cancellation API (local-only cancel). Full record: `safepay-verification.md`.
+- **xPay / AssanPay:** replaced providers (BD-P-01); not registered, no references reactivated; historical verification docs explicitly marked HISTORICAL / REPLACED / NOT ACTIVE.
 
-Verification: backend tsc PASS · eslint src PASS (0 issues) · `medusa build` PASS · unit 69/69 (4 suites) · integration 83/83 (8 suites) · storefront tsc PASS · root lint 2/2 PASS. No dependencies beyond `@medusajs/payment-stripe@2.19.0` (exact locked version, already present in the pnpm store). Next: full AssanPay contract verification → AssanPay adapter → PK region binding → real provider E2E contract tests.
+Verification (2026-08-16 baseline): backend tsc PASS · eslint src PASS (0 issues) · `medusa build` PASS · unit 69/69 (4 suites) · integration 83/83 (8 suites) · storefront tsc PASS · root lint 2/2 PASS. No dependencies beyond `@medusajs/payment-stripe@2.19.0` (exact locked version, already present in the pnpm store).
+
+### 33. Implementation Update (2026-08-17 — Safepay replaces AssanPay)
+
+- **Safepay adapter implemented** (BD-P-01 revised): `apps/backend/src/modules/payment-safepay` — `IPaymentProvider` implementation (service/client/amounts/webhook), registered env-gated in `medusa-config.ts` (`PAYMENT_PROVIDER` may list `safepay,stripe`; provider key `pp_safepay_safepay`). Contract + compatibility matrix: `docs/architecture/provider-verification/safepay-verification.md`.
+- **Environment:** `SAFEPAY_MERCHANT_API_KEY` · `SAFEPAY_SECRET_KEY` · `SAFEPAY_WEBHOOK_SECRET` · `SAFEPAY_ENVIRONMENT` · `SAFEPAY_REDIRECT_URL` · `SAFEPAY_CANCEL_URL` (fail-fast validation; names only in `.env.example`; obsolete AssanPay variables removed).
+- **Region binding:** seed binds `pp_safepay_safepay` → PK region when registered (T-PAY-02).
+- **Stripe re-verified** against installed source during the Safepay verification — no defects found; unchanged.
+- **Verification (2026-08-17):** backend tsc PASS (3 pre-existing checkout.spec.ts integration-test type errors remain — present on HEAD before this change) · eslint src PASS · `medusa build` PASS · unit 136/136 (6 suites; +67 for Safepay/env/config) · integration 9/11 suites PASS — payments/inventory/customer-auth webhook-event waits time out identically on clean HEAD (pre-existing Redis event-bus environment issue, not introduced). No new dependencies (adapter calls the verified REST contract directly; the published `@sfpy/node-core@0.3.5` was inspected but not added — it lacks the documented webhooks/refund surface).
+- **Remaining (2026-08-18):** production credentials + Dashboard webhook endpoint configuration (Safepay `https://backend.flicter.com/hooks/payment/safepay_safepay`, Stripe `https://backend.flicter.com/hooks/payment/stripe_stripe`); storefront Safepay redirect UX (reads `data.checkout_url`); Stripe decline-card simulation unavailable in this test account (failure path covered by signed `payment_intent.payment_failed` webhook test — no state change — and status-mapping unit tests).
+
+### 34. Implementation Update (2026-08-17 — Admin-managed provider configuration)
+
+Provider credentials and enable/disable state are now managed through the
+**Medusa Admin UI** instead of `.env` (approved architecture 2026-08-17 —
+"Admin-managed provider configuration"; see
+`docs/architecture/consolidated-decision-register.md`).
+
+**Architecture** (`Admin UI → Admin API → payment-config module → provider runtime → Safepay/Stripe`):
+
+- **New custom module `payment-config`** (`apps/backend/src/modules/payment-config`,
+  key `payment_config`, PostgreSQL tables `payment_provider_config` +
+  `payment_provider_config_audit`, migration `Migration20260817122354`):
+  - `PaymentProviderConfig` — one row per provider (`safepay` / `stripe`):
+    `enabled`, `environment`, public `config` JSON (non-secret), `secrets`
+    JSON holding **AES-256-GCM encrypted** values (node `crypto`; format
+    `v1:iv:tag:ciphertext`; master key `PAYMENT_CONFIG_ENCRYPTION_KEY` — a
+    64-hex-char deployment secret, validated at boot, **never stored in the
+    database**), plus last-tested metadata.
+  - `PaymentProviderConfigAudit` — sanitized audit trail (provider, action,
+    actor id, environment, changed field NAMES — never values).
+  - Service: `getRuntimeConfig` (decrypts for the provider runtime only),
+    `upsertConfig` (blank secret = retain stored value; non-blank = rotate;
+    enabling requires every required field), masked `listAdminConfigs` /
+    `getAdminConfig` (secret field names only), `recordTestResult`.
+- **Admin API** (`/admin/payment-provider-config`): `GET` list (masked,
+  includes `registered` state), `GET/POST /:provider` (upsert + native
+  region↔provider binding sync on enable/disable for the provider's own
+  market), `POST /:provider/test-connection` (server-side, non-financial).
+  All routes are protected by the framework's automatic `/admin`
+  authentication (verified in installed `router.js`: bearer/session/api-key,
+  user actor) — no secrets are ever returned.
+- **Admin UI**: Settings → **Payment Providers** page
+  (`src/admin/routes/settings/payment-providers/page.tsx`) — per-provider
+  card: enabled toggle, environment (sandbox/production for Safepay,
+  test/live for Stripe), public fields (redirect/cancel URLs, intent /
+  publishable key, capture mode), password-type credential fields (blank =
+  keep stored, value = rotate), webhook endpoint display, **Test connection**
+  button, status badges (Enabled/Disabled, Configured/Not configured,
+  Registered/Not registered), market mapping (PK→Safepay, AE→Stripe).
+- **Provider runtime** (Medusa `IPaymentProvider` unchanged; no custom
+  payment engine):
+  - **Safepay** (`src/modules/payment-safepay`) resolves its configuration
+    from `payment_config` on every operation; `initiatePayment`/`updatePayment`
+    refuse when disabled or incomplete (sanitized errors); webhook signature
+    verification uses the stored `webhookSecret`.
+  - **Stripe** — new thin runtime wrapper
+    (`src/modules/payment-stripe-runtime`, provider key **`pp_stripe_stripe`
+    preserved** → native webhook route `/hooks/payment/stripe_stripe`, region
+    bindings, and storefront contract all unchanged) that constructs the
+    official `@medusajs/payment-stripe` provider **lazily** with the stored
+    config and delegates the full `IPaymentProvider` contract (the official
+    provider requires `apiKey` at construction — verified in its
+    `stripe-base` source — so it cannot be registered with boot-time-only
+    credentials). No Stripe logic is re-implemented.
+- **Connection testing**: Safepay `POST /client/passport/v1/token`
+  (non-financial, requires valid secret-key auth); Stripe `GET /v1/balance`
+  (non-financial). Results persist as `last_tested_at/status/error`
+  (sanitized); never a charge, never raw provider responses.
+- **Enable/disable semantics**: `enabled=false` → provider refuses new
+  payment sessions (server-side gate) AND the native
+  `region_payment_provider` binding is removed for its market (storefront
+  stops offering it); historical payments/orders/refunds untouched; webhook
+  verification for in-flight sessions keeps working (needs the stored secret,
+  not the enabled flag). Enabling binds the region again (idempotent).
+  Cross-market isolation preserved (Safepay only ever binds PK, Stripe only
+  AE — no routing engine).
+- **`.env` migration**: provider credentials are no longer required in the
+  environment. `SAFEPAY_*` / `STRIPE_*` credential variables are
+  **TRANSITIONAL** legacy fallbacks with explicit precedence
+  (**Admin-managed configuration > legacy environment configuration**);
+  `PAYMENT_PROVIDER` still selects which providers are REGISTERED. New
+  required env var: `PAYMENT_CONFIG_ENCRYPTION_KEY` (64 hex chars; the only
+  payment secret that stays in the environment, by design). `.env.example`
+  documents names only.
+- **Tests**: unit 199/199 (11 suites; +encryption 13, payment-config utils
+  16, Stripe wrapper 14, Safepay runtime config 9, admin helpers 8);
+  integration **126/126 (12 suites)** incl. the new
+  `payment-provider-config.spec.ts` (12 tests: admin auth required, masked
+  list/save/read-back with zero secret leakage, blank-keeps/rotate retention,
+  enable-requires-complete rejection, unknown provider/field/environment
+  rejection, sanitized audit trail, sanitized test-connection for an
+  unregistered provider, storefront 404 isolation). Backend tsc PASS (3
+  pre-existing `checkout.spec.ts` errors remain), lint PASS, `medusa build`
+  PASS (backend + Admin frontend with the new page). Storefront unchanged
+  (tsc/lint/tests PASS — 136/136). **No new dependencies added.**
+- **Sandbox verification**: **BLOCKED** — no Safepay/Stripe sandbox
+  credentials are present in this environment (`.env` has none; the
+  verification docs record the same). Once credentials are supplied, run the
+  sandbox flows through the Admin UI (configure → enable → test connection →
+  payment → webhook → refund).

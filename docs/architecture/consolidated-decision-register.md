@@ -61,10 +61,10 @@ historical record):
 | BD-C-06 | APPROVED | Per-market required address fields; country must match region |
 | BD-C-07 | DERIVED (BD-G-01) | No pre-checkout conversion; convert on login |
 | BD-C-08 | DERIVED (BD-P-05) | Checkout retry per payment retry policy |
-| BD-P-01 | APPROVED (selection) | **AssanPay Pakistan (PKR)** — replaces earlier xPay selection (provider replacement requested before implementation); contract verification per `docs/architecture/provider-verification/assanpay-verification.md` |
+| BD-P-01 | APPROVED (selection, revised 2026-08-17) | **Safepay Pakistan (PKR)** — replaces earlier AssanPay selection (which replaced xPay; both replaced before implementation, historical evidence preserved); contract verified + adapter implemented per `docs/architecture/provider-verification/safepay-verification.md` |
 | BD-P-02 | APPROVED (selection) | **Stripe (AED)** — contract verified (see `docs/architecture/provider-verification/stripe-verification.md`) |
 | BD-P-03 | APPROVED | No COD in V1 |
-| BD-P-04 | PROVIDER_VERIFICATION_REQUIRED | Method set per provider (AssanPay/Stripe) |
+| BD-P-04 | PROVIDER_VERIFICATION_REQUIRED | Method set per provider (Safepay/Stripe; Safepay hosted-checkout methods verified at the contract level) |
 | BD-P-05 | APPROVED | Bounded retries (3) with backoff; status check before retry |
 | BD-P-06 | IMPLEMENTATION_DEFINED | No native TTL; refresh-driven |
 | BD-P-07 | PROVIDER_VERIFICATION_REQUIRED | Partial capture — provider-dependent |
@@ -280,7 +280,7 @@ commerce flows cannot be completed.
 | T-PAY-05 | Reconciliation mechanism | payments §25 | Reconciliation | Scheduled job (alias T-RET-13, T-ORD-12) |
 | T-PAY-06 | Retry counts/timing | payments §25 | Provider calls | Values at implementation |
 | T-PAY-07 | Rate limiting payment/webhook | payments §25 | Launch hardening | AGENTS.md §14 |
-| T-PAY-08 | Admin extension boundaries | payments §25 | Admin | No custom Admin V1 |
+| T-PAY-08 | Admin extension boundaries | payments §25 | Admin | **RESOLVED (2026-08-17)** — Settings → Payment Providers custom Admin route for Admin-managed provider credentials (`payment-config` module, encrypted at rest); standard Medusa Admin remains authoritative |
 | T-PAY-09 | Redis role in payments | payments §25 | = T-INV-01 (alias) | — |
 | T-PAY-10 | Webhook delay/retries options | payments §25 | Webhooks | webhook_delay 5000 / retries 3 |
 | T-SHIP-05 | Retry policy values | shipping-and-fulfillment §25 | Provider calls | Bounded backoff |
@@ -368,13 +368,13 @@ B-ORD-13, B-SHIP-17 (Parts 1 + 3); T-CC-04, T-INV-01, T-PAY-04, T-PAY-09
 
 **Resolution status (2026-08-16): BUSINESS DECISIONS COMPLETE.** The
 highest-priority cluster is resolved: security (B-ORD-01, B-RET-02), providers
-(BD-P-01 AssanPay — replacement of earlier xPay selection —, BD-P-02
+(BD-P-01 Safepay — replacement of the earlier AssanPay selection, which replaced xPay —, BD-P-02
 Stripe), money policy (tax policy BD-M-02, market
 selection BD-M-01, COD BD-P-03 no, stacking BD-M-04), returns/refunds
 (B-RET-01..17), cancellation (BD-O-02..05), shipping model (BD-S-01), and
 backorders (BD-I-02 no). Remaining implementation gates (not decisions): PK
 GST numeric rate, AE VAT numeric rate, provider contract verification
-(AssanPay, Stripe; TCS/Aramex at shipping stage).
+(Safepay, Stripe — sandbox runs pending; TCS/Aramex at shipping stage).
 
 **Resolution order executed (2026-08-16, per
 `business-decision-dependency-graph.md` §8):** BD-M-01 → BD-P-01/02 →
@@ -394,3 +394,17 @@ record: `docs/architecture/authentication-authorization.md`.
 | BD-AUTH-02 | Session lifetime | **APPROVED** — `http.jwtExpiresIn = "1d"` + storefront `_medusa_jwt` cookie 1d | Bearer-token cookie kept (starter pattern); Medusa cookie-session not used |
 | BD-AUTH-03 | Google OAuth scope | **APPROVED** — env-gated registration now (`AUTH_GOOGLE_ENABLED=true` AND all `GOOGLE_*` vars present); gate OFF by default; storefront button gated on provider list; full E2E blocked on real Google Cloud credentials | `@medusajs/auth-google@2.19.0` options verified: `clientId`, `clientSecret`, `callbackUrl`. New Google identities → actorless token → storefront creates customer from token `user_metadata.email` → `auth.refresh()` |
 | BD-AUTH-04 | Forgot/reset password | **APPROVED** — native flow: `/auth/customer/emailpass/reset-password` (201 for unknown identifiers too — no leak; token via `auth.password_reset` event) + `/auth/customer/emailpass/update` (bearer reset token) | `/forgot-password` and `/reset-password` storefront pages implemented; notification delivery (email) is a future notification-boundary phase |
+
+## Payment Provider Configuration Decisions (BD-PC-01..06, 2026-08-17)
+
+Resolved during the Admin-managed provider configuration phase. All
+APPROVED and IMPLEMENTED. Details: `docs/specifications/payments.md` §34.
+
+| ID | Decision | Resolution | Note |
+| --- | --- | --- | --- |
+| BD-PC-01 | Where provider credentials are managed | **APPROVED** — Medusa Admin UI (Settings → Payment Providers), NOT `.env` | Provider credentials are runtime-administered; only the AES-256-GCM master key (`PAYMENT_CONFIG_ENCRYPTION_KEY`) stays in the environment |
+| BD-PC-02 | Secure credential storage | **APPROVED** — custom `payment-config` Medusa module (PostgreSQL `payment_provider_config`; secrets AES-256-GCM encrypted at rest, node `crypto`, `v1:iv:tag:ciphertext`; decrypted server-side only) | No second database; Redis never holds credentials; no plaintext settings table |
+| BD-PC-03 | Provider runtime configuration resolution | **APPROVED** — providers resolve config from `payment_config` on every operation; Safepay directly; Stripe via a thin runtime wrapper that lazily constructs the official `@medusajs/payment-stripe` provider (key `pp_stripe_stripe` preserved) | The official Stripe provider requires `apiKey` at construction (verified in installed source) — wrapper delegates the full `IPaymentProvider` contract; no Stripe logic re-implemented |
+| BD-PC-04 | Enable/disable semantics | **APPROVED** — `enabled` gates new payment sessions (provider-side refusal) AND syncs the native region↔provider binding (storefront visibility); historical payments/orders/refunds untouched; webhook verification for in-flight sessions keeps working | Cross-market isolation preserved (Safepay→PK only, Stripe→AE only); no routing engine |
+| BD-PC-05 | Secret API/masking rules | **APPROVED** — GET/list/upsert responses carry secret field NAMES only; blank secret on save retains the stored value, non-blank rotates; secrets never logged, never in errors, never in storefront APIs | Enforced at the module boundary + API routes + sanitized connection-test errors |
+| BD-PC-06 | `.env` migration | **APPROVED** — legacy `SAFEPAY_*`/`STRIPE_*` credential variables become TRANSITIONAL fallbacks with precedence **Admin-managed configuration > legacy environment configuration**; `PAYMENT_PROVIDER` remains the registration selector; `PAYMENT_CONFIG_ENCRYPTION_KEY` is newly required | No dual authority: once a `payment_config` row exists it is authoritative |

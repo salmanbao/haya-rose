@@ -1,0 +1,93 @@
+[    3575ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ https://backend.flicter.com/app/@fs/home/salman/projects/baby-store/apps/backend/node_modules/.vite/deps/chunk-2RPZVG4R.js?v=c0f3a9ab:21608
+[    3711ms] [LOG] i18next: languageChanged en @ https://backend.flicter.com/app/@fs/home/salman/projects/baby-store/apps/backend/node_modules/.vite/deps/chunk-E4KRUK64.js?v=c0f3a9ab:13
+[    3711ms] [LOG] i18next: initialized {debug: true, initImmediate: true, ns: Array(1), defaultNS: Array(1), fallbackLng: Array(1)} @ https://backend.flicter.com/app/@fs/home/salman/projects/baby-store/apps/backend/node_modules/.vite/deps/chunk-E4KRUK64.js?v=c0f3a9ab:13
+[    4926ms] [INFO] Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: https://backend.flicter.com/app/@fs/home/salman/projects/baby-store/node_modules/.pnpm/@medusajs+dashboard@2.19.0_@sinclair+typebox@0.34.41_@types+react-dom@19.0.5_@types+rea_6f81c4e37fc55254098d2487d4713ea9/node_modules/@medusajs/dashboard/dist/RobotoMono-Regular-27MA6W2G.ttf @ https://backend.flicter.com/app/settings/payment-providers:0
+[    4995ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://backend.flicter.com/app/settings/payment-providers:0
+[    4996ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://backend.flicter.com/app/settings/payment-providers:0
+[    4996ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://backend.flicter.com/app/settings/payment-providers:0
+[    4996ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://backend.flicter.com/app/settings/payment-providers:0
+[    4996ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://backend.flicter.com/app/settings/payment-providers:0
+[  241974ms] [ERROR] WebSocket connection to 'wss://backend.flicter.com:43427/app/?token=eUqhv-NQuI4W' failed: WebSocket opening handshake timed out @ https://backend.flicter.com/app/@vite/client:744
+[  241975ms] [ERROR] [vite] failed to connect to websocket (Error: WebSocket closed without opened.).  @ https://backend.flicter.com/app/@vite/client:771
+[  241984ms] Error: WebSocket closed without opened.
+    at WebSocket.<anonymous> (https://backend.flicter.com/app/@vite/client:423:30)
+[  680535ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  682014ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  742915ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  744619ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  805960ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  807711ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  869712ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  871211ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  932291ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  934985ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  996469ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[  997889ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1058952ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1060356ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1121568ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1122987ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1183894ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1185705ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1246554ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1248292ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1332057ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1333652ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1394521ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1396284ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1457562ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1459615ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1520578ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1522024ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1583173ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1584855ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1645629ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1647057ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1707663ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1709130ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1772175ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1773998ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1834694ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1836718ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1897563ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1899313ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1959827ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 1961310ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2022554ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2024836ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2086211ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2087650ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2148193ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2149784ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2210981ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2212370ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2272868ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2274327ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2334830ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2336173ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2397277ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2398638ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2459101ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2460512ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2521029ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2522482ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2583184ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2585022ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2645587ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2647030ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2708002ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2709437ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2772035ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2773545ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2834273ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2835711ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2896442ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2897876ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2958558ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 2961057ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3022421ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3023880ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3084448ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3085873ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3146405ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0
+[ 3147838ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ https://backend.flicter.com/admin/notifications?limit=1&offset=0&fields=created_at:0

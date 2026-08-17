@@ -19,7 +19,7 @@ requirement IDs.
 | Formal specification conflicts | **0** |
 | Critical findings | **0** |
 | Architecture drift | **0** |
-| Remaining implementation gates | 1. Tax rate values (PK GST, AE VAT) · 2. Provider contract verification (AssanPay — in progress, partially verified; Stripe — verified; TCS/Aramex at shipping stage) |
+| Remaining implementation gates | 1. Tax rate values (PK GST, AE VAT) · 2. Provider sandbox verification (Safepay — contract verified + adapter implemented, sandbox run pending; Stripe — verified, credentials pending; TCS/Aramex at shipping stage) |
 
 The three HIGH security findings (A-1/A-2/A-3) are **resolved conceptually** by
 the approved policies (BD-G-01 guest policy, BD-O-01 authenticated-only order
@@ -72,9 +72,9 @@ are **internally consistent and mutually implementable**. The audit found:
 is now **COMPLETE (2026-08-16)**: all 40 user decisions approved; 0 formal
 specification conflicts; 0 critical findings; 0 architecture drift. The
 remaining implementation gates are **not decisions**: PK GST and AE VAT
-numeric rates, and provider contract verification (AssanPay — partially
-verified, webhook/refund/auth contract pending; Stripe — verified; TCS/Aramex
-at the shipping stage). Implementation has NOT started.
+numeric rates, and provider sandbox verification (Safepay — contract
+verified + adapter implemented, sandbox run pending; Stripe — verified,
+credentials pending; TCS/Aramex at the shipping stage).
 
 ---
 

@@ -1,9 +1,23 @@
 # AssanPay Provider Verification (Pakistan / PKR)
 
-**Status:** PARTIALLY VERIFIED — the redirect/cashier payment lifecycle is
-verified against official documentation; **API authentication, webhook contract,
-refund API, API base URL, full status vocabulary, and 3DS remain UNVERIFIED/TBD**
-(blocking full implementation).
+> ## ⚠️ HISTORICAL / REPLACED — NOT ACTIVE
+>
+> **AssanPay is NO LONGER the approved Pakistan payment provider.**
+>
+> - **Status: REPLACED BY SAFEPAY** (2026-08-17) — provider replacement
+>   requested before implementation. See
+>   `docs/architecture/provider-verification/safepay-verification.md` for the
+>   current Pakistan provider verification and the implemented adapter.
+> - This document is preserved as **historical verification evidence only**.
+>   It must not be cited as the active Pakistan provider contract.
+> - The approved V1 provider topology is **Safepay (PKR)** for Pakistan and
+>   **Stripe (AED)** for the UAE.
+
+**Historical verification status (at time of replacement):** PARTIALLY
+VERIFIED — the redirect/cashier payment lifecycle was verified against
+official documentation; **API authentication, webhook contract, refund API,
+API base URL, full status vocabulary, and 3DS remained UNVERIFIED/TBD**
+(blocking implementation — these gates are what prompted the replacement).
 
 **Verification date:** 2026-08-16
 **Verifier:** implementation agent (documentation-only task; no code changed)

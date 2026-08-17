@@ -308,13 +308,12 @@ REQ-MP-002, REQ-MP-011, REQ-MP-031, REQ-PAY-002, REQ-ORD-021, REQ-RET-023.
 
 ## BD-P-01 — Pakistan payment provider
 
-**✅ APPROVED (selection) — AssanPay Pakistan (PKR). This REPLACES the
-earlier xPay selection (provider replacement requested before
-implementation). Contract verification (PKR support, sandbox, refunds,
-webhooks, signatures) is PROVIDER_VERIFICATION_REQUIRED against official
-AssanPay documentation before implementation — the selection is approved,
-the integration is not. See
-`docs/architecture/provider-verification/assanpay-verification.md`.**
+**✅ APPROVED (selection, revised 2026-08-17) — Safepay Pakistan (PKR). This REPLACES the
+earlier AssanPay selection (which itself replaced xPay; both replacements
+requested before implementation). Contract VERIFIED against official Safepay documentation (retrieved via
+Context7) and the adapter implemented (2026-08-17) — sandbox contract runs
+remain pending. See
+`docs/architecture/provider-verification/safepay-verification.md`.**
 
 ### Question
 
@@ -443,7 +442,7 @@ REQ-PAY-001, REQ-PAY-003, REQ-PAY-023, REQ-PAY-026.
 ## BD-P-03 — Cash on Delivery (COD)
 
 **✅ APPROVED — Option A: no COD in V1. All orders paid online at checkout
-(AssanPay PK, Stripe AE).**
+(Safepay PK, Stripe AE).**
 
 ### Question
 
@@ -1283,5 +1282,5 @@ canonical decisions).
 
 **RESOLVED (2026-08-16): all 40 answered and APPROVED by the product
 owner.** Outstanding items are implementation gates, not decisions: PK GST
-numeric rate, AE VAT numeric rate, and provider contract verification
-(AssanPay, Stripe; TCS/Aramex at shipping implementation).
+numeric rate, AE VAT numeric rate, and provider sandbox verification
+(Safepay, Stripe; TCS/Aramex at shipping implementation).

@@ -65,7 +65,7 @@ agent inference.
   This spec supersedes the earlier shipping draft's "payments pending"
   framing. Shipping↔payment interaction is defined in §17 here and
   cross-referenced against payments.md §5.3/§7/§15/§16. Payment provider
-  selection APPROVED (BD-P-01 AssanPay — replaces earlier xPay selection —,
+  selection APPROVED (BD-P-01 Safepay — replaces earlier AssanPay selection, which replaced xPay —,
   BD-P-02 Stripe; contract verification per `docs/architecture/provider-verification/`);
   COD APPROVED — no COD in V1 (BD-P-03).
 - **`docs/specifications/inventory-and-warehouses.md`** — authoritative:

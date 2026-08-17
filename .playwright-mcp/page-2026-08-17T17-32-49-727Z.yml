@@ -1,0 +1,70 @@
+- generic [ref=e3]:
+  - generic [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e51]:
+        - button [ref=e53] [cursor=pointer]
+        - list [ref=e57]:
+          - listitem [ref=e58]:
+            - generic [ref=e59]: Orders
+      - generic [ref=e60]:
+        - button "Customize layout" [ref=e61] [cursor=pointer]
+        - button [ref=e66] [cursor=pointer]
+    - main [ref=e69]:
+      - generic [ref=e72]:
+        - generic [ref=e73]:
+          - heading "Orders" [level=1] [ref=e74]
+          - link "Export" [ref=e75] [cursor=pointer]:
+            - /url: /app/orders/export
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - button "Add filter" [ref=e80] [cursor=pointer]
+            - generic [ref=e81]:
+              - searchbox "Search" [ref=e83]
+              - button [ref=e84] [cursor=pointer]
+          - generic [ref=e87]:
+            - table [ref=e89]:
+              - rowgroup [ref=e90]:
+                - row [ref=e91]:
+                  - columnheader "Order" [ref=e92]
+                  - columnheader "Date" [ref=e95]
+                  - columnheader "Customer" [ref=e98]
+                  - columnheader "Sales Channel" [ref=e101]
+                  - columnheader "Payment" [ref=e104]
+                  - columnheader "Fulfillment" [ref=e107]
+                  - columnheader "Order Total" [ref=e110]
+                  - columnheader [ref=e113]
+              - rowgroup [ref=e114]:
+                - row [ref=e115] [cursor=pointer]:
+                  - cell [ref=e116]:
+                    - link "#1" [ref=e117]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e121]:
+                    - link "Aug 17, 2026" [ref=e122]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e126]:
+                    - link "buyer-smoke@example.com" [ref=e127]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e131]:
+                    - link "Pakistan Sales Channel" [ref=e132]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e136]:
+                    - link "Authorized" [ref=e137]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e142]:
+                    - link "Fulfilled" [ref=e143]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e148]:
+                    - link "Rs 32,175 PKR" [ref=e149]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+                  - cell [ref=e153]:
+                    - link "-" [ref=e154]:
+                      - /url: /app/orders/order_01M07DY9PSMZRMYSNHJVQRCRXQ
+            - generic [ref=e159]:
+              - generic [ref=e160]:
+                - paragraph [ref=e161]: "1"
+                - paragraph [ref=e163]: 1 of 1 results
+              - generic [ref=e164]:
+                - paragraph [ref=e166]: 1 of 1 pages
+                - button "Prev" [disabled] [ref=e167]
+                - button "Next" [disabled] [ref=e168]
+  - region "Notifications alt+T"

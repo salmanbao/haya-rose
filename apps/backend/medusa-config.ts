@@ -40,30 +40,83 @@ const fileModule =
       }
     : undefined
 
-// UAE/AED payment provider (approved decision BD-P-02: Stripe, PaymentIntents
-// model). Registered only when PAYMENT_PROVIDER=stripe; the provider key
-// forms as `pp_stripe_stripe` (verified `pp_{identifier}_{id}`). Capture mode
-// defaults to manual (deferred) capture per T-PAY-03 and is overridable via
-// PAYMENT_STRIPE_CAPTURE=automatic. AssanPay (PK/PKR) remains unregistered:
-// its official contract is still pending verification (hard gates: auth,
-// webhooks, refunds — provider-verification docs).
+// Payment providers (approved topology: Pakistan/PKR → Safepay (BD-P-01,
+// revised: Safepay replaces AssanPay), UAE/AED → Stripe (BD-P-02)). PAYMENT_PROVIDER
+// accepts a comma-separated list (e.g. "safepay,stripe") and selects which
+// providers are REGISTERED (infrastructure choice). Provider keys form as
+// `pp_{identifier}_{id}` (verified in the @medusajs/payment 2.19.0 provider
+// loader): `pp_stripe_stripe` and `pp_safepay_safepay`.
+//
+// ADMIN-MANAGED CONFIGURATION (approved architecture 2026-08-17): provider
+// credentials and enable/disable state are managed through the Admin UI via
+// the payment-config module (encrypted at rest in PostgreSQL). Providers
+// resolve their runtime configuration from that module on every operation.
+// The env options below are TRANSITIONAL bootstrap/backward-compat fallbacks
+// only, with explicit precedence: Admin-managed configuration > legacy
+// environment configuration. Neither is required for boot; a provider with
+// no configuration fails safely at payment initiation (never falls back to
+// another provider).
+//
+// Safepay is a local module provider (src/modules/payment-safepay)
+// implementing the verified IPaymentProvider contract (contract + matrix:
+// docs/architecture/provider-verification/safepay-verification.md); webhook
+// endpoint POST /hooks/payment/safepay_safepay. Stripe uses a thin local
+// runtime-config wrapper (src/modules/payment-stripe-runtime) that preserves
+// the pp_stripe_stripe provider key and delegates to the official
+// @medusajs/payment-stripe provider constructed lazily with the stored
+// configuration (the official provider requires an apiKey at construction,
+// verified in its stripe-base source — so it is constructed only when
+// configuration exists). Stripe capture mode defaults to manual (deferred)
+// per T-PAY-03, configurable via the Admin.
+const paymentProviderSelection = (process.env.PAYMENT_PROVIDER ?? "")
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+
+const paymentProviderRegistrations: Array<Record<string, unknown>> = []
+
+if (paymentProviderSelection.includes('stripe')) {
+  paymentProviderRegistrations.push({
+    resolve: './src/modules/payment-stripe-runtime',
+    id: 'stripe',
+    options: {
+      // Transitional fallback (Admin-managed config takes precedence).
+      apiKey: process.env.STRIPE_SECRET_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+      capture: process.env.PAYMENT_STRIPE_CAPTURE === 'automatic',
+    },
+  })
+}
+
+if (paymentProviderSelection.includes('safepay')) {
+  paymentProviderRegistrations.push({
+    resolve: './src/modules/payment-safepay',
+    id: 'safepay',
+    options: {
+      // Transitional fallback (Admin-managed config takes precedence).
+      merchantApiKey: process.env.SAFEPAY_MERCHANT_API_KEY,
+      secretKey: process.env.SAFEPAY_SECRET_KEY,
+      webhookSecret: process.env.SAFEPAY_WEBHOOK_SECRET,
+      environment: process.env.SAFEPAY_ENVIRONMENT ?? 'sandbox',
+      redirectUrl: process.env.SAFEPAY_REDIRECT_URL,
+      cancelUrl: process.env.SAFEPAY_CANCEL_URL,
+    },
+  })
+}
+
 const paymentModule =
-  process.env.PAYMENT_PROVIDER === 'stripe'
+  paymentProviderRegistrations.length > 0
     ? {
         resolve: '@medusajs/medusa/payment',
+        // `payment_config` is declared as a module dependency so the payment
+        // module's local container can lazily resolve it from the app
+        // container (verified: modules-sdk load-internal.js registers each
+        // dependency in the module's local container as a proxy to the main
+        // container). The provider services resolve their Admin-managed
+        // runtime configuration through this cradle access.
+        dependencies: ['payment_config'],
         options: {
-          providers: [
-            {
-              resolve: '@medusajs/medusa/payment-stripe',
-              id: 'stripe',
-              options: {
-                apiKey: process.env.STRIPE_SECRET_KEY,
-                webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-                capture:
-                  process.env.PAYMENT_STRIPE_CAPTURE === 'automatic',
-              },
-            },
-          ],
+          providers: paymentProviderRegistrations,
         },
       }
     : undefined
@@ -148,6 +201,13 @@ module.exports = defineConfig({
     }
   },
   modules: {
+    // Secure, Admin-managed payment-provider configuration (encrypted at
+    // rest; master key PAYMENT_CONFIG_ENCRYPTION_KEY stays in the
+    // environment). Registered unconditionally — it is the configuration
+    // store, requires no credentials, and is used by the providers + Admin.
+    payment_config: {
+      resolve: './src/modules/payment-config',
+    },
     [Modules.AUTH]: authModule,
     [Modules.CACHE]: {
       resolve: '@medusajs/medusa/cache-redis',

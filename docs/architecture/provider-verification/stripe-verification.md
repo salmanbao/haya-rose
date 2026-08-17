@@ -2,8 +2,12 @@
 
 **Status:** VERIFIED for the approved V1 integration model — Stripe **PaymentIntents
 API** via the bundled Medusa `@medusajs/payment-stripe@2.19.0` provider, confirmed
-against official Stripe documentation and installed Medusa 2.19.0 source. Remaining
-items are configuration/credential steps, not capability gaps.
+against official Stripe documentation, installed Medusa 2.19.0 source, and a live
+**test-mode run (2026-08-18, sandbox verification COMPLETE)**: session creation →
+client confirmation (pm_card_visa) → deferred authorization → manual capture →
+refund, plus the signed webhook pipeline (`payment_intent.succeeded` →
+captured; `payment_intent.payment_failed` → no state change). Remaining items
+are production configuration/credential steps, not capability gaps.
 
 **Verification date:** 2026-08-16
 **Verifier:** implementation agent (documentation-only task; no code changed)
@@ -149,11 +153,20 @@ Implementation boundary: documentation only; no code/config/dependency changes
 
 | # | Item | Type |
 | --- | --- | --- |
-| 1 | UAE Stripe account + API keys (test/live) | PROVIDER_VERIFICATION_REQUIRED (credentials) |
-| 2 | Enable webhook endpoint + subscribe required events in the Stripe Dashboard | CONFIGURATION at implementation |
+| 1 | UAE Stripe account + API keys for **production** (test-mode keys verified 2026-08-18) | PROVIDER_VERIFICATION_REQUIRED (credentials) |
+| 2 | Enable webhook endpoint + subscribe required events in the Stripe Dashboard (production) — receiving pipeline verified via signed payloads at `POST /hooks/payment/stripe_stripe` (payment_intent.succeeded → captured; payment_intent.payment_failed → ignored, no state change) | CONFIGURATION at implementation |
 | 3 | Payment methods to enable for V1 (card default; Apple Pay/Google Pay/Link optional per BD-P-04) | CONFIGURATION (method set per BD-P-04) |
 | 4 | Stripe Radar/fraud rules (BD-P-12) | PROVIDER_VERIFICATION_REQUIRED |
-| 5 | Confirm `capture_method` (manual deferred capture vs automatic) per T-PAY-03 | IMPLEMENTATION_DEFINED |
+| 5 | Confirm `capture_method` (manual deferred capture vs automatic) per T-PAY-03 | IMPLEMENTATION_DEFINED (manual capture verified in test mode) |
+
+**Test-mode notes (2026-08-18):** live decline-card simulation was NOT
+available — this Stripe account rejects raw card numbers via the API
+("Sending credit card numbers directly to the Stripe API is generally
+unsafe") and the prebuilt declined test payment-method ids return
+`resource_missing` (SANDBOX_LIMITATION). The failure path is covered by the
+signed `payment_intent.payment_failed` webhook test (ignored → no state
+change) and by unit tests of the bundled provider's status mapping
+(`last_payment_error` → ERROR).
 
 **Nothing here changes the approved architecture.** Stripe integration is a
 configuration + bundled-provider task; the adapter boundary is already fully
