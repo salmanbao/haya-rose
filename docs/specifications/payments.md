@@ -629,8 +629,50 @@ Provider credentials and enable/disable state are now managed through the
   pre-existing `checkout.spec.ts` errors remain), lint PASS, `medusa build`
   PASS (backend + Admin frontend with the new page). Storefront unchanged
   (tsc/lint/tests PASS — 136/136). **No new dependencies added.**
-- **Sandbox verification**: **BLOCKED** — no Safepay/Stripe sandbox
-  credentials are present in this environment (`.env` has none; the
-  verification docs record the same). Once credentials are supplied, run the
-  sandbox flows through the Admin UI (configure → enable → test connection →
-  payment → webhook → refund).
+- **Sandbox verification**: **COMPLETE** — Safepay sandbox + Stripe test-mode
+  credentials are managed through the Admin UI (encrypted at rest,
+  `payment_provider_config.secrets`, `v1:` AES-GCM prefix; never in `.env` or
+  source). Full sandbox verification completed **2026-08-18** (session
+  creation, hosted/test checkout payment, deferred authorization, capture,
+  refund, signed webhook pipeline — see `safepay-verification.md` §3.11/§3.12
+  and `stripe-verification.md` §14) and was **independently re-verified
+  2026-08-19** (live `test-connection` `ok` for both providers; full
+  integration regression 138/138 — see §35).
+
+### 35. Implementation Update (2026-08-19 — independent re-verification + admin route fix)
+
+- **Live real-provider re-verification (2026-08-19):** `POST
+  /admin/payment-provider-config/safepay/test-connection` and
+  `/stripe/test-connection` both returned `{"status":"ok"}` against the **real**
+  provider APIs (Safepay sandbox `POST /client/passport/v1/token`; Stripe test
+  mode `GET /v1/balance`), using the Admin-stored encrypted credentials.
+  Results persisted in `payment_provider_config_audit` (`test_connection`,
+  2026-08-19 05:51 +05).
+- **Build + regression green:** `tsc --noEmit` exit 0; `medusa build` PASS;
+  backend integration **138/138 (13 suites)** incl. `payment-provider-config`
+  (13/13) and `payments` (6/6 — capture idempotency, refund ≤ captured,
+  region-scoped provider listing, native webhook pipeline).
+- **Regression fixed in `apps/backend/src/api/admin/payment-provider-config/[provider]/route.ts`:**
+  the region↔provider binding query was reverted from
+  `remoteQueryObjectFromString({ entryPoint: LINKS.RegionPaymentProvider })`
+  (throws at runtime for a link — caused HTTP 500 on
+  `POST /admin/payment-provider-config/[provider]`) back to the
+  runtime-correct `remoteQuery({ service: LINKS.RegionPaymentProvider,
+  variables: { filters: { region_id } }, fields: [...] })`, typed with a
+  precise function-signature cast (no `as any`). Matches the native
+  `setRegionsPaymentProvidersStep` form.
+- **Encryption + masking re-confirmed:** `payment_provider_config.secrets`
+  carries the `v1:` AES-GCM prefix for both providers (DB-layer check); admin
+  views return only secret *names* (`buildAdminView` — `secrets_configured`,
+  `has_webhook_secret`, `configured`), never values; storefront APIs reject
+  provider-config access; no literal provider credentials anywhere in source.
+- **Stripe partial-refund evidence recorded:** order #12
+  (`order_01M0AFNNP73VC4KYWCW1M7F543`) — `pay_01M0AFNPSRQJA3ACXBZF69YH88`
+  (AED 2,672.25) → partial refund `ref_01M0AGRNANYSEY92MWAE1SQD69` (AED 1,000),
+  documented in `stripe-verification.md` §14.
+- **Environmental limitation (non-blocking):** the full interactive
+  hosted-checkout + inbound-webhook storefront flow was not re-driven
+  headlessly this session (Safepay requires a browser redirect; both providers
+  need public webhook ingress). Prior-session DB evidence (real Stripe
+  PaymentIntents `pi_3…`, real Safepay trackers `track_…`, real refunds)
+  substantiates the end-to-end execution.

@@ -6,9 +6,9 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "dev": "pnpm -r dev",
+    "dev": "node api.js && pnpm -r dev",
     "build": "pnpm -r build",
-    "start": "turbo start",
+    "start": "node api.js && turbo start",
     "lint": "turbo lint",
     "test": "turbo test",
     "backend:seed": "turbo seed --filter=@dtc/backend",

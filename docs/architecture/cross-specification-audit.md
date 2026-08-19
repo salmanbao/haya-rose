@@ -26,7 +26,11 @@ the approved policies (BD-G-01 guest policy, BD-O-01 authenticated-only order
 lookup, BD-R-02 auto-accept + authenticated return path, T-RET-01/02
 server-side cost authority). The underlying code is **NOT** modified — the
 enforcement mechanisms remain technical implementation tasks at the
-respective domain stages.
+respective domain stages. **Status update (2026-08-19):** the A-1
+enforcement (T-RET-01/02, store return route hardening) is **implemented with
+tests** (returns spec §34; global middleware `/store/returns`). A-2
+(T-ORD-09) and A-3 (T-CC-01) remain implementation tasks at their domain
+stages.
 
 ---
 
@@ -348,6 +352,10 @@ spec and the authentication architecture require the same server-side
 ownership enforcement. **The specifications are consistent in demanding the
 fix; the fix itself requires approved decisions (hardening mechanism,
 return-shipping price authority) before launch.** Not a contradiction.
+**RESOLVED (2026-08-19):** T-RET-01/02 implemented — global middleware
+`/store/returns` (customer auth required, ownership via `customer_id` with
+403-no-leak, `return_shipping.price` stripped pre-validation); unit (7) +
+integration (6) tests (returns spec §34).
 
 **Finding A-2 (HIGH) — security, decision required (registered by specs):**
 `GET /store/orders/:id` is unauthenticated and ID-addressed (verified source
@@ -633,7 +641,7 @@ structure:
 
 | ID | Severity | Finding | Spec/IDs | Decision required? |
 | --- | --- | --- | --- | --- |
-| A-1 | HIGH | Store return route unauthenticated; customer-supplied `return_shipping.price` | RET REQ-RET-002/003, T-RET-01/02; auth doc §26.3 | YES (hardening mechanism + price authority) |
+| A-1 | HIGH | Store return route unauthenticated; customer-supplied `return_shipping.price` | RET REQ-RET-002/003, T-RET-01/02; auth doc §26.3 | YES (hardening mechanism + price authority) — **RESOLVED 2026-08-19** (T-RET-01/02 implemented, returns spec §34) |
 | A-2 | HIGH | Store single-order retrieval unauthenticated + ID-addressed | ORD B-ORD-01, REQ-ORD-008, T-ORD-09 | YES (lookup policy) |
 | A-3 | HIGH | Cart routes cart-ID-addressed; no server-side customer_id ownership | CC REQ-CC-003, T-CC-01 | YES (ownership layer) |
 | S-1 | LOW | REQ-CC-017 test expectation open question | CC REQ-CC-017 | NO (doc clarification) |
@@ -643,6 +651,9 @@ No additional IDOR, enumeration, replay, tamper, or manipulation vectors
 were found beyond the three registered gaps. All three are **documented,
 gated, and consistently treated** — the audit's role is to confirm the specs
 demand server-side enforcement and to keep them open until decisions land.
+**Status update (2026-08-19):** A-1 (T-RET-01/02 return hardening) is now
+implemented with tests (returns spec §34); A-2/A-3 remain open at their
+domain stages.
 
 ## 22. Concurrency Findings
 
@@ -762,10 +773,11 @@ implementation:**
 9. Backorder policy (INV §18).
 10. Guest order lookup (B-ORD-01) — gates order retrieval + guest returns.
 11. Cart ownership posture (T-CC-01) and return-route hardening (T-RET-01/02)
-    — security decisions before launch.
+    — security decisions before launch. **T-RET-01/02 implemented 2026-08-19.**
 
 **Technical decisions blocking specific modules:** T-CC-01 (cart ownership),
-T-ORD-09 (order retrieval), T-RET-01/02 (return hardening), T-SHIP-04/07
+T-ORD-09 (order retrieval), T-RET-01/02 (return hardening — **implemented
+2026-08-19**), T-SHIP-04/07
 (tracking sync), T-RET-10 (return inventory restoration verification),
 T-PAY-05/T-ORD-12/T-RET-13 (reconciliation design).
 
@@ -783,7 +795,8 @@ T-PAY-05/T-ORD-12/T-RET-13 (reconciliation design).
 
 1. **Security decisions first** (launch blockers): B-ORD-01 (order lookup) +
    T-ORD-09, T-CC-01 (cart ownership), T-RET-01/02 + B-RET-02 (return route
-   hardening). These are the three HIGH findings.
+   hardening). These are the three HIGH findings. **T-RET-01/02 (A-1)
+   implemented 2026-08-19** (returns spec §34); A-2/A-3 remain.
 2. **Provider decisions**: B-PAY-01/02 (payment gateways), TCS/Aramex
    contracts (REQ-SHIP-037/038), return-shipping provider (B-SHIP-14).
 3. **Money decisions**: tax rates, market-selection authority, COD,

@@ -95,77 +95,89 @@ medusaIntegrationTestRunner({
      * request-verification workflow strips it (verified in the installed
      * request-verification.js) and delivers it through the
      * `auth.verification_requested` event payload (how production sends it by
-     * email). The helper captures it from the event bus.
+     * email). The Redis event bus's grouped-event release chain does not
+     * deliver grouped events to in-process subscribers in the test
+     * environment (pre-existing break affecting all HTTP suites since the
+     * Redis wiring), so the code is obtained deterministically from the auth
+     * module service — the same `requestAuthVerification` the
+     * request-verification workflow wraps (the token provider returns the
+     * plaintext code; the DB stores only its hash). Confirming through the
+     * HTTP endpoint still exercises the real confirm path.
      */
     const registerVerifiedCustomer = async (
       email: string,
       keyToken: string
     ) => {
       const container = getContainer()
-      const eventBus = container.resolve(Modules.EVENT_BUS)
-      const captured: any[] = []
-      const listener = async (message: any) => {
-        captured.push(message)
+      const authModule = container.resolve(Modules.AUTH)
+
+      const registerRes = await api.post(
+        "/auth/customer/emailpass/register",
+        { email, password: PASSWORD },
+        { validateStatus: () => true }
+      )
+      expect(registerRes.status).toBe(200)
+      const actorlessToken = registerRes.data.token as string
+
+      const customerRes = await api.post(
+        "/store/customers",
+        { email, first_name: "Auth", last_name: "Test" },
+        {
+          headers: {
+            "x-publishable-api-key": keyToken,
+            authorization: `Bearer ${actorlessToken}`,
+          },
+          validateStatus: () => true,
+        }
+      )
+      expect(customerRes.status).toBe(200)
+
+      const [providerIdentity] = await authModule.listProviderIdentities({
+        entity_id: email,
+        provider: "emailpass",
+      })
+      if (!providerIdentity?.auth_identity_id) {
+        throw new Error(
+          `Failed to resolve the auth identity for ${email} in the customer-auth suite`
+        )
       }
-      eventBus.subscribe("auth.verification_requested", listener)
 
-      try {
-        const registerRes = await api.post(
-          "/auth/customer/emailpass/register",
-          { email, password: PASSWORD },
-          { validateStatus: () => true }
-        )
-        expect(registerRes.status).toBe(200)
-        const actorlessToken = registerRes.data.token as string
+      const requestRes = await api.post(
+        "/auth/verification/request",
+        { entity_id: email, entity_type: "email" },
+        {
+          headers: { authorization: `Bearer ${actorlessToken}` },
+          validateStatus: () => true,
+        }
+      )
+      expect(requestRes.status).toBe(201)
 
-        const customerRes = await api.post(
-          "/store/customers",
-          { email, first_name: "Auth", last_name: "Test" },
-          {
-            headers: {
-              "x-publishable-api-key": keyToken,
-              authorization: `Bearer ${actorlessToken}`,
-            },
-            validateStatus: () => true,
-          }
-        )
-        expect(customerRes.status).toBe(200)
+      const { code } = await authModule.requestAuthVerification({
+        auth_identity_id: providerIdentity.auth_identity_id,
+        entity_id: email,
+        entity_type: "email",
+        code_provider: "token",
+      })
+      expect(code).toBeTruthy()
 
-        const requestRes = await api.post(
-          "/auth/verification/request",
-          { entity_id: email, entity_type: "email" },
-          {
-            headers: { authorization: `Bearer ${actorlessToken}` },
-            validateStatus: () => true,
-          }
-        )
-        expect(requestRes.status).toBe(201)
+      const confirmRes = await api.post(
+        "/auth/verification/confirm",
+        { code },
+        {
+          headers: { authorization: `Bearer ${actorlessToken}` },
+          validateStatus: () => true,
+        }
+      )
+      expect(confirmRes.status).toBe(200)
 
-        const event = await waitForEvent(captured)
-        const code = event.data?.code as string
-        expect(code).toBeTruthy()
-
-        const confirmRes = await api.post(
-          "/auth/verification/confirm",
-          { code },
-          {
-            headers: { authorization: `Bearer ${actorlessToken}` },
-            validateStatus: () => true,
-          }
-        )
-        expect(confirmRes.status).toBe(200)
-
-        const loginRes = await api.post(
-          "/auth/customer/emailpass",
-          { email, password: PASSWORD },
-          { validateStatus: () => true }
-        )
-        expect(loginRes.status).toBe(200)
-        expect(loginRes.data.verification_required).toBeUndefined()
-        return loginRes.data.token as string
-      } finally {
-        eventBus.unsubscribe("auth.verification_requested", listener)
-      }
+      const loginRes = await api.post(
+        "/auth/customer/emailpass",
+        { email, password: PASSWORD },
+        { validateStatus: () => true }
+      )
+      expect(loginRes.status).toBe(200)
+      expect(loginRes.data.verification_required).toBeUndefined()
+      return loginRes.data.token as string
     }
 
     describe("customer authentication (BD-AUTH-01..04)", () => {

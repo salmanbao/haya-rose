@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 
 type Props = {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ email?: string }>
 }
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -12,8 +13,13 @@ export const metadata: Metadata = {
 }
 
 export default async function OrderConfirmedPage(props: Props) {
-  const params = await props.params
-  const order = await retrieveOrder(params.id).catch(() => null)
+  const [params, searchParams] = await Promise.all([
+    props.params,
+    props.searchParams,
+  ])
+  const order = await retrieveOrder(params.id, searchParams.email).catch(
+    () => null
+  )
 
   if (!order) {
     return notFound()

@@ -5,14 +5,16 @@ import medusaError from "@lib/util/medusa-error"
 import { getAuthHeaders, getCacheOptions } from "./cookies"
 import { HttpTypes } from "@medusajs/types"
 
-export const retrieveOrder = async (id: string) => {
+export const retrieveOrder = async (id: string, email?: string) => {
   const headers = {
     ...(await getAuthHeaders()),
   }
 
-  const next = {
-    ...(await getCacheOptions("orders")),
-  }
+  // Guest lookups are authenticated by the email credential (B-ORD-01) and
+  // are personalized order data — never cached publicly (AGENTS.md §14).
+  // Authenticated lookups keep the existing tag-based cache pattern.
+  const cache = email ? "no-store" : "force-cache"
+  const next = email ? {} : await getCacheOptions("orders")
 
   return sdk.client
     .fetch<HttpTypes.StoreOrderResponse>(`/store/orders/${id}`, {
@@ -20,10 +22,11 @@ export const retrieveOrder = async (id: string) => {
       query: {
         fields:
           "*payment_collections.payments,*items,*items.metadata,*items.variant,*items.product",
+        ...(email ? { email } : {}),
       },
       headers,
       next,
-      cache: "force-cache",
+      cache,
     })
     .then(({ order }) => order)
     .catch((err) => medusaError(err))
