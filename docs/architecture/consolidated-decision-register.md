@@ -244,8 +244,8 @@ commerce flows cannot be completed.
 | --- | --- | --- | --- | --- |
 | T-CC-01 | Customer-cart ownership enforcement | cart-and-checkout §28; **audit A-3** | Customer cart security | Custom store middleware/route override; decision required |
 | T-ORD-09 | Single-order retrieval enforcement | orders §33; **audit A-2** | Order lookup security | Custom middleware/route per B-ORD-01 |
-| T-RET-01 | Store return route hardening | returns-and-refunds §34; **audit A-1** | Return request security | Auth + ownership before native workflow |
-| T-RET-02 | Server-side return shipping cost resolution | returns-and-refunds §34; **audit A-1** | Return cost integrity | Ignore client `price`; use option price |
+| T-RET-01 | Store return route hardening | returns-and-refunds §34; **audit A-1** | Return request security | Auth + ownership before native workflow — **RESOLVED (2026-08-19):** global middleware `/store/returns` (`src/api/middlewares.ts` + `src/api/store/returns/ownership.ts`); unit (7) + integration (6) tests |
+| T-RET-02 | Server-side return shipping cost resolution | returns-and-refunds §34; **audit A-1** | Return cost integrity | Ignore client `price`; use option price — **RESOLVED (2026-08-19):** middleware strips `return_shipping.price` pre-validation; integration test (tampered price ignored) |
 | T-PAY-01/02 | Provider registration + region binding | payments §25 | Provider integration | Native `payment_provider` + `region_payment_provider` |
 | T-PAY-03 | Authorization→capture timing | payments §25 | Capture flows | Immediate vs deferred per provider |
 | T-SHIP-01..03 | Provider registration/lifecycle/option config | shipping-and-fulfillment §25 | Fulfillment config | Native registration; per-market fulfillment sets |

@@ -3,6 +3,7 @@ import {
   ContainerRegistrationKeys,
   Modules,
 } from "@medusajs/framework/utils"
+import type { Subscriber } from "@medusajs/framework/types"
 import { createShippingOptionsWorkflow } from "@medusajs/medusa/core-flows"
 
 import initialDataSeed from "../../src/migration-scripts/initial-data-seed"
@@ -427,7 +428,7 @@ medusaIntegrationTestRunner({
       }
 
       const codes: { code: string }[] = []
-      const onEvent = (event: { data?: { code?: string } }) => {
+      const onEvent: Subscriber<{ code: string }> = async (event) => {
         if (typeof event?.data?.code === "string") {
           codes.push({ code: event.data.code })
         }
@@ -720,30 +721,37 @@ medusaIntegrationTestRunner({
 
         const pricingModule = container.resolve(Modules.PRICING)
         const prices = await pricingModule.listPrices(
-          {
-            currency_code: "pkr",
-            price_set_id: [variantLink.price_set_id],
-          },
+          { price_set_id: [variantLink.price_set_id] },
           { take: null }
         )
-        if (prices.length === 0) {
+        if (!prices.some((price) => price.currency_code === "pkr")) {
           throw new Error("No pkr price found for the variant")
         }
-        for (const price of prices) {
-          await pricingModule.updatePrices([
-            { id: price.id, amount: originalUnitPrice + 1000 },
-          ])
-        }
-
-        const retrieved = await api.get(`/store/orders/${order.id}`, {
-          headers: storefrontHeaders,
+        // updatePriceSets deletes prices omitted from the input; pass all
+        // prices back so only the pkr amount changes.
+        await pricingModule.updatePriceSets(variantLink.price_set_id, {
+          prices: prices.map((price) => ({
+            id: price.id,
+            currency_code: price.currency_code ?? "pkr",
+            amount:
+              price.currency_code === "pkr"
+                ? originalUnitPrice + 1000
+                : Number(price.amount),
+          })),
         })
+
+        // B-ORD-01 (T-ORD-09): unauthenticated single-order retrieval
+        // requires the guest email credential — ID alone is rejected 403.
+        const retrieved = await api.get(
+          `/store/orders/${order.id}?email=${encodeURIComponent(order.email)}`,
+          { headers: storefrontHeaders }
+        )
         expect(toNumber(retrieved.data.order.items[0].unit_price)).toBe(
           originalUnitPrice
         )
       })
 
-      it("REQ-CC-018 — guest checkout completes end-to-end; order is retrievable without auth", async () => {
+      it("REQ-CC-018 — guest checkout completes end-to-end; order is retrievable with the guest email credential", async () => {
         const email = `guest-${Date.now()}@test.local`
         const { order } = await completeCheckout(variantId, 1, { email })
 
@@ -751,9 +759,10 @@ medusaIntegrationTestRunner({
         expect(order.email).toBe(email)
         expect(order.currency_code).toBe("pkr")
 
-        const byId = await api.get(`/store/orders/${order.id}`, {
-          headers: storefrontHeaders,
-        })
+        const byId = await api.get(
+          `/store/orders/${order.id}?email=${encodeURIComponent(email)}`,
+          { headers: storefrontHeaders }
+        )
         expect(byId.status).toBe(200)
         expect(byId.data.order.id).toBe(order.id)
       })

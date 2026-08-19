@@ -18,11 +18,3 @@ module.exports = {
   setupFiles: ["./integration-tests/setup.js"],
   testTimeout: 60000,
 };
-
-if (process.env.TEST_TYPE === "integration:http") {
-  module.exports.testMatch = ["**/integration-tests/http/*.spec.[jt]s"];
-} else if (process.env.TEST_TYPE === "integration:modules") {
-  module.exports.testMatch = ["**/src/modules/*/__tests__/**/*.[jt]s"];
-} else if (process.env.TEST_TYPE === "unit") {
-  module.exports.testMatch = ["**/src/**/__tests__/**/*.unit.spec.[jt]s"];
-}

@@ -164,15 +164,16 @@ order snapshot immutability tests; reconciliation (T-ORD-12).
 
 **Why last in the spine:** consumes Orders (quantities, transactions),
 Payments (refunds), Shipping (return shipment), Inventory (restoration).
-**Work:** store return route hardening (T-RET-01/02 — **security decision**);
+**Work:** store return route hardening (T-RET-01/02 — **security decision**;
+**IMPLEMENTED 2026-08-19** — global middleware `/store/returns`, see RET §34);
 eligibility per B-RET-01..06/25; return workflows; refund calculation per
 B-RET-09..17; refund execution via payment module; inventory restoration
 (T-RET-10 verify); return shipping per B-SHIP-13/14; reconciliation
 (T-RET-13).
 **Inputs:** Phases 4–6.
 **Outputs:** return/refund state; inventory restoration.
-**Gates:** B-RET-01..25 (policy — largest unresolved cluster), T-RET-01/02/10,
-B-PAY-03 (COD refunds).
+**Gates:** B-RET-01..25 (policy — resolved 2026-08-16), T-RET-01/02 (**RESOLVED
+2026-08-19**) /10, B-PAY-03 (COD refunds).
 **Verification:** installed return/refund workflows (RET §38).
 
 ### Phase 8 — Supporting features (after core spine)

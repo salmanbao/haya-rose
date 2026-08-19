@@ -2,7 +2,11 @@ import type {
   AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import {
+  ContainerRegistrationKeys,
+  LINKS,
+  Modules,
+} from "@medusajs/framework/utils"
 import { updateRegionsWorkflow } from "@medusajs/medusa/core-flows"
 
 import {
@@ -114,17 +118,41 @@ async function syncRegionBinding(
   const regionModule = container.resolve(Modules.REGION) as {
     listRegions: (
       filters: Record<string, unknown>
-    ) => Promise<Array<{ id: string; payment_providers?: Array<{ id: string }> }>>
+    ) => Promise<Array<{ id: string }>>
   }
 
   const [region] = await regionModule.listRegions({ name: regionName })
   if (!region) {
     return
   }
-  const [regionRecord] = await regionModule.listRegions({ id: region.id })
-  const bound = (regionRecord?.payment_providers ?? []).map(
-    (provider: { id: string }) => provider.id
-  )
+
+  // Region ↔ payment-provider bindings live in the cross-module link
+  // LINKS.RegionPaymentProvider — the region module itself has no
+  // `payment_providers` relation, so reading it via regionModule.listRegions()
+  // always yields an empty list (making disable a silent no-op and enable
+  // clobber other bound providers). Read the link directly through
+  // remoteQuery, exactly like the native setRegionsPaymentProvidersStep.
+  // The `service`-form query is runtime-correct (the native step uses it), but
+  // the published RemoteQueryFunction overloads do not model `variables`/`fields`
+  // on the joiner-query shape, so we pin a precise call-signature cast here
+  // instead of widening to `any` (no secrets, no behaviour change).
+  const remoteQuery = container.resolve(
+    ContainerRegistrationKeys.REMOTE_QUERY
+  ) as unknown as (query: {
+    service: string
+    variables?: Record<string, unknown>
+    fields?: string[]
+  }) => Promise<Array<{ region_id: string; payment_provider_id: string }>>
+
+  const regionProviderLinks = await remoteQuery({
+    service: LINKS.RegionPaymentProvider,
+    variables: {
+      filters: { region_id: region.id },
+    },
+    fields: ["region_id", "payment_provider_id"],
+  })
+  const bound = regionProviderLinks.map((link) => link.payment_provider_id)
+
   const next = computeRegionBindingUpdate(bound, providerKey, enabled)
   if (next.join(",") !== bound.join(",")) {
     await updateRegionsWorkflow(container).run({
