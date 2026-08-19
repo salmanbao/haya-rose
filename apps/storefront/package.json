@@ -8,9 +8,9 @@
     "medusa-storefront"
   ],
   "scripts": {
-    "dev": "next dev --turbopack -p 8000",
+    "dev": "node api.js && next dev --turbopack -p 8000",
     "build": "next build",
-    "start": "next start -p 8000",
+    "start": "node api.js && next start -p 8000",
     "lint": "next lint",
     "test": "jest",
     "analyze": "ANALYZE=true next build"

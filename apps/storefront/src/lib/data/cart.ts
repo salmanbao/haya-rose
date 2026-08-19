@@ -465,7 +465,19 @@ export async function placeOrder(cartId?: string) {
     revalidateTag(orderCacheTag)
 
     removeCartId()
-    redirect(`/${countryCode}/order/${cartRes?.order.id}/confirmed`)
+
+    // Guests reach the confirmed page without an auth token; under B-ORD-01
+    // the order email is their retrieval credential, so it is carried in the
+    // redirect URL for `retrieveOrder` to pass back to the store API.
+    const isGuest = !("authorization" in headers)
+    const emailParam =
+      isGuest && cartRes.order.email
+        ? `?email=${encodeURIComponent(cartRes.order.email)}`
+        : ""
+
+    redirect(
+      `/${countryCode}/order/${cartRes?.order.id}/confirmed${emailParam}`
+    )
   }
 
   return cartRes.cart

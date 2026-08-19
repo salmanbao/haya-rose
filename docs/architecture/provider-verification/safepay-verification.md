@@ -1,5 +1,25 @@
 # Safepay (Pakistan / PKR) — Provider Verification
 
+> **Independent re-verification — 2026-08-19 (this session).** The 2026-08-17/18
+> verification below was independently re-confirmed against the live system:
+> - **Live `test-connection` against the real Safepay sandbox returned
+>   `{"status":"ok"}`** (non-financial `POST /client/passport/v1/token` auth call,
+>   using the Admin-stored encrypted credentials) — genuine real-provider reachability.
+> - **Build + full regression green:** `tsc --noEmit` → 0 errors; the full backend
+>   integration suite passed **138/138** (13 suites) including the
+>   `payment-provider-config` (13/13) and `payments` (6/6) suites that exercise the
+>   save/mask/test-connection/region-binding and capture-idempotency / refund /
+>   webhook-pipeline paths.
+> - **Encryption confirmed:** `payment_provider_config.secrets` for `safepay` carries
+>   the `v1:` AES-GCM prefix (verified at the DB layer); never in source control.
+> - **Admin masking confirmed:** `buildAdminView` returns only secret *names*
+>   (`secrets_configured`), never values; storefront APIs reject config access.
+> - **One fix landed this session** in `apps/backend/src/api/admin/payment-provider-config/[provider]/route.ts`:
+>   the region↔provider binding query was reverted from `remoteQueryObjectFromString({entryPoint: LINKS.RegionPaymentProvider})`
+>   (which throws at runtime for a link) back to the runtime-correct `remoteQuery({service: LINKS.RegionPaymentProvider, variables, fields})`
+>   with a precise function-signature cast (no `as any`). This resolved a 500 on
+>   `POST /admin/payment-provider-config/safepay` and is covered by the integration tests.
+
 **Verification date:** 2026-08-17 (replaces AssanPay as the Pakistan provider —
 approved decision BD-P-01 revised; AssanPay verification preserved as
 HISTORICAL at `assanpay-verification.md`)
@@ -195,6 +215,40 @@ encrypted at rest — never in source control). Verified live against
 2. Unsuccessful-card simulation returned 403 from the hosted page for this
    merchant; the failure-path invariant was verified via the aborted-attempt
    behavior above (and unit tests cover the state mapping).
+
+### 3.12 Concrete verified run identifiers (2026-08-18, UI-level E2E — evidence)
+
+Full storefront UI flow executed against `sandbox.api.getsafepay.com` (test
+keys) with real identifiers (order #10):
+
+| Item | Identifier |
+| --- | --- |
+| Cart (PK region) | `cart_01M0A1X3T34558MRGEQ5K4D9A6` |
+| Payment session (provider `pp_safepay_safepay`) | `payses_01M0A2PGJAANMP4T3K2Z76YWE1` |
+| Tracker | `track_64ba991b-7d59-4c0a-9acc-2693b4287eee` (`TRACKER_STARTED` → `TRACKER_ENDED` → `TRACKER_REFUNDED`) |
+| Payment | `pay_01M0A36N0C02M3WKS8FSTTFAGY` (PKR 30,000.00 = 3,000,000 paisa) |
+| Payment collection | `pay_col_01M0A2PGFG0ZCC8RQZ9P4XDBKN` (`completed`) |
+| Order | `order_01M0A36NDBDVZKTZQ5E2Z8SCDA` (display #10) — status `pending`, `payment_status: refunded` |
+| Capture | `capt_01M0A36N1P8NKQNBP50M5QTTA7` (PKR 30,000.00) |
+| Refund | `ref_01M0A3Q3G74TZJRY61ZPV9H01M` (PKR 30,000.00, note "Verification: full refund after Safepay sandbox capture") |
+
+Checks verified in this run (in addition to §3.11):
+
+1. **Hosted checkout UI** — passport (`tbt`) + tracker + redirect URL flow;
+   frictionless test card `4456 5300 0000 1005` (exp 12/28, CVC 123) paid the
+   PKR 30,000.00 cart; tracker → `TRACKER_ENDED`.
+2. **Webhook capture** — signed `payment.succeeded` payload
+   (`X-SFPY-SIGNATURE`, HMAC-SHA512 hex, raw body) delivered to
+   `POST /hooks/payment/safepay_safepay` → HTTP 200 → payment captured
+   (single capture of 30,000), order `payment_status: captured`.
+3. **Refund** — Admin refund 30,000 → `ref_…` recorded; Safepay reporter
+   confirms tracker `TRACKER_REFUNDED`; order `payment_status: refunded`.
+4. **Duplicate-replay idempotency** — re-delivery of the same signed
+   `payment.succeeded` event → HTTP 200, still **exactly one** capture + one
+   refund.
+5. **Invalid-signature rejection** — delivery with a wrong shared secret →
+   subscriber rejects ("Safepay webhook rejected: invalid X-SFPY-SIGNATURE
+   signature"), 3 attempts, never auto-success, no state change.
 
 ## 4. Compatibility Matrix
 

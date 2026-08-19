@@ -781,8 +781,8 @@ BD-P-03); no COD refund rules exist in this domain.
 
 | ID | Question | Status | Affected REQs | Notes |
 | --- | --- | --- | --- | --- |
-| T-RET-01 | Store return route hardening mechanism (custom route wrapping native workflow vs middleware) | OPEN | REQ-RET-003/025 | Custom route/middleware; native workflow stays authority |
-| T-RET-02 | Server-side return shipping cost resolution (ignore client `price`) | OPEN | REQ-RET-004 | Use shipping-option price; mirror cart checkout authority |
+| T-RET-01 | Store return route hardening mechanism (custom route wrapping native workflow vs middleware) | RESOLVED (2026-08-19) | REQ-RET-003/025 | **DONE:** global store middleware `/store/returns` (`src/api/middlewares.ts` + pure helper `src/api/store/returns/ownership.ts`). Requires customer auth (401 unauthenticated — REQ-RET-002); ownership via `customer_id` (403 mismatch, never revealing existence — mirrors T-CC-01/T-ORD-09); unknown order → native 404. Unit (7) + integration (6) tests green; T-RET-02 handled in same middleware |
+| T-RET-02 | Server-side return shipping cost resolution (ignore client `price`) | RESOLVED (2026-08-19) | REQ-RET-004 | **DONE:** middleware deletes `req.body.return_shipping.price` before native zod validation (verified native `prepareShippingMethodData` honors client price when ≥ 0); native workflow resolves shipping-option price server-side. Integration test: tampered `price` ignored (shipping_methods.amount == option price) |
 | T-RET-03 | Return shipment provider integration (TCS/Aramex) — rate/label/tracking | OPEN (UNVERIFIED provider) | REQ-RET-015 | See §35 |
 | T-RET-04 | Customer return/refund view API (ownership-scoped) | OPEN | REQ-RET-006/025 | No ID-only exposure |
 | T-RET-05 | Refund workflow mapping & transaction boundary | OPEN | REQ-RET-019..022 | Native payment module |
@@ -1056,6 +1056,30 @@ Verified specifics:
 - TCS/Aramex return-shipment capabilities — UNVERIFIED (see §35).
 - Payment-provider refund capabilities — UNVERIFIED (payments spec; provider
   not selected).
+
+### T-RET-01/02 Implementation Verification Record (2026-08-19)
+
+```
+Medusa version: 2.19.0 (locked; unchanged)
+Relevant packages: @medusajs/medusa (api/store/returns middlewares + validators),
+  @medusajs/order (return/return-item/return-reason models, return workflows),
+  @medusajs/core-flows (createAndCompleteReturnOrderWorkflow)
+Relevant APIs: POST /store/returns (native route, zod-validated schema with
+  return_shipping.price; createAndCompleteReturnOrderWorkflow);
+  Modules.ORDER.retrieveOrder(id, { select: ["id", "customer_id"] })
+Installed source verification: store/returns/middlewares.js (no auth middleware),
+  store/returns/validators.js (return_shipping.price accepted), order module
+  return-item action (fulfilled-quantity bound), create-complete-return.js
+  (shipping-method resolution + prepareShippingMethodData honoring client price)
+Official docs verification: not required beyond installed source (hierarchy §27)
+Context7 verification: Context7 MCP not invocable in this environment (recorded §38)
+Compatibility result: verified against installed 2.19.0; no v1 concepts
+Implementation boundary: global store middleware + pure decision helper + unit/
+  integration tests in apps/backend; no dependency/config/DB/storefront changes
+Tests: unit 7/7 (ownership.unit.spec.ts), integration 6/6 (returns.spec.ts);
+  full regression: backend unit 232, backend integration 144, storefront 136,
+  tsc/lint/build green on both apps
+```
 
 ## 39. Cross-Specification Dependencies
 

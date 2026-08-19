@@ -1,13 +1,34 @@
 # Stripe Provider Verification (UAE / AED)
 
+> **Independent re-verification — 2026-08-19 (this session).** The 2026-08-18
+> verification below was independently re-confirmed against the live system:
+> - **Live `test-connection` against the real Stripe test mode returned
+>   `{"status":"ok"}`** (non-financial `GET /v1/balance` call with the Admin-stored
+>   encrypted secret key) — genuine real-provider reachability.
+> - **Build + full regression green:** `tsc --noEmit` → 0 errors; the full backend
+>   integration suite passed **138/138** (13 suites) including `payment-provider-config`
+>   (13/13) and `payments` (6/6).
+> - **Encryption confirmed:** `payment_provider_config.secrets` for `stripe` carries the
+>   `v1:` AES-GCM prefix (verified at the DB layer); never in source control.
+> - **Admin masking confirmed:** `buildAdminView` returns only secret *names*, never values;
+>   storefront APIs reject config access.
+> - **One fix landed this session** in `apps/backend/src/api/admin/payment-provider-config/[provider]/route.ts`:
+>   the region↔provider binding query was reverted from `remoteQueryObjectFromString({entryPoint: LINKS.RegionPaymentProvider})`
+>   (throws at runtime for a link) back to `remoteQuery({service: LINKS.RegionPaymentProvider, variables, fields})`
+>   with a precise function-signature cast (no `as any`). This resolved a 500 on
+>   `POST /admin/payment-provider-config/stripe` and is covered by the integration tests.
+
 **Status:** VERIFIED for the approved V1 integration model — Stripe **PaymentIntents
 API** via the bundled Medusa `@medusajs/payment-stripe@2.19.0` provider, confirmed
 against official Stripe documentation, installed Medusa 2.19.0 source, and a live
-**test-mode run (2026-08-18, sandbox verification COMPLETE)**: session creation →
-client confirmation (pm_card_visa) → deferred authorization → manual capture →
-refund, plus the signed webhook pipeline (`payment_intent.succeeded` →
-captured; `payment_intent.payment_failed` → no state change). Remaining items
-are production configuration/credential steps, not capability gaps.
+**test-mode run (2026-08-18, sandbox verification COMPLETE)** covering both the
+API-level confirmation (pm_card_visa) and the **full storefront UI flow**
+(CardElement card entry → order confirmation → deferred authorization → manual
+capture → refund), plus the signed webhook pipeline (`payment_intent.succeeded`
+→ captured; `payment_intent.payment_failed` → no state change), duplicate-replay
+idempotency, and invalid-signature rejection. Concrete run identifiers in §14.
+Remaining items are production configuration/credential steps, not capability
+gaps.
 
 **Verification date:** 2026-08-16
 **Verifier:** implementation agent (documentation-only task; no code changed)
@@ -171,3 +192,67 @@ change) and by unit tests of the bundled provider's status mapping
 **Nothing here changes the approved architecture.** Stripe integration is a
 configuration + bundled-provider task; the adapter boundary is already fully
 implemented by `@medusajs/payment-stripe`.
+
+## 14. Concrete Test-Mode Run (2026-08-18, UI-level E2E — evidence)
+
+Full **storefront UI flow** executed against the local backend (test keys) with
+real identifiers:
+
+| Item | Identifier |
+| --- | --- |
+| Cart (AE region) | `cart_01M0A43GS8RERQ7QE0J9NS9SSZ` |
+| Payment session (provider `pp_stripe_stripe`) | `payses_01M0A46ACNCN21S1S01F6Y5A3H` (`capture_method: manual`, `payment_method_types: [card, link]`) |
+| PaymentIntent | `pi_3U5jaTRqOMwfgvG20LHVP8yL` — `requires_payment_method` → `requires_capture` → `succeeded` |
+| Payment | `pay_01M0A5QCFRD0RT3ZTER95WSKC0` (AED 2,672.25) |
+| Payment collection | `pay_col_01M0A46AA2Y1GQ9R9YP45PJ0ED` (`completed`) |
+| Order | `order_01M0A5QAZBWE8YXWGBV2GEMMHG` (display #11) — status `pending`, `payment_status: refunded` |
+| Capture | `capt_01M0A5WYX2MM9JW68W942MN3ZN` (AED 2,672.25) |
+| Refund | `ref_01M0A5YW5XQC4P1S4T50BDXC0C` (AED 2,672.25, note "Verification: full refund after Stripe test capture") |
+| Stripe-side verification | `payment_intent.succeeded`; charge `paid: true`, `refunded: true`, `amount_refunded: 267225` (fils) |
+
+**Partial-refund run (2026-08-18, order #12)** — partial refunds are
+independent of full refunds and were verified on a separate real test-mode
+PaymentIntent:
+
+| Item | Identifier |
+| --- | --- |
+| Order | `order_01M0AFNNP73VC4KYWCW1M7F543` (display #12) — `payment_status: partially_refunded` |
+| Payment | `pay_01M0AFNPSRQJA3ACXBZF69YH88` (AED 2,672.25) |
+| Partial refund | `ref_01M0AGRNANYSEY92MWAE1SQD69` (AED 1,000 of 2,672.25, note "Verification: partial refund (AED 1,000 of AED 2,672.25)") |
+
+Partial refunds use the same `POST /admin/payments/{id}/refund { amount }` path
+as full refunds; Medusa enforces refund ≤ captured natively (over-refund
+rejected — see §6 and `payments.spec.ts`).
+
+Flow and checks verified:
+
+1. **CardElement UI entry** — real Stripe Elements iframe ("Secure card payment
+   input frame") rendered on the checkout payment step; test card
+   `4242 4242 4242 4242`, exp `12/28`, CVC `123`, postal `12345` accepted; all
+   four Element fields must be `is-complete` before `e.complete` is true (button
+   stays disabled otherwise). Brand shown on review step: **Visa**.
+2. **Order placement** — "Place order" → order confirmed page: "AED 2,672.25
+   paid", order #11, email `stripe-verify@test.local`. Order `payment_status:
+   authorized` (deferred/manual capture as expected), PC `authorized`.
+3. **Capture** — `POST /admin/payments/{id}/capture { amount: 2672.25 }`
+   (calls Stripe capture API; PI → `succeeded`, amount_received 267225) then a
+   **signed** `payment_intent.succeeded` webhook (HMAC-SHA256, `stripe-signature:
+   t=…,v1=…`, raw body) delivered to `POST /hooks/payment/stripe_stripe` →
+   HTTP 200 → capture recorded, order `payment_status: captured`, PC `completed`.
+4. **Refund** — `POST /admin/payments/{id}/refund { amount: 2672.25, note }` →
+   refund recorded; Stripe confirms `charge.refunded: true`,
+   `amount_refunded: 267225`. Order `payment_status: refunded`.
+5. **Duplicate-replay idempotency** — re-delivery of the same signed
+   `payment_intent.succeeded` event → HTTP 200, still **exactly one** capture +
+   one refund (no duplicate financial effect).
+6. **Invalid-signature rejection** — delivery with a wrong HMAC secret →
+   route HTTP 200 (native hooks route acks) but the subscriber rejects
+   ("No signatures found matching the expected signature for payload…"),
+   3 attempts, never auto-success, no state change.
+
+**Storefront configuration note (operational):** the CardElement only renders
+when `NEXT_PUBLIC_STRIPE_KEY` (Stripe publishable key) is set in the
+storefront environment; when missing, `stripePromise` is null, the
+`StripeWrapper` is skipped, and the payment step shows a skeleton with a
+disabled button. This was the root cause of a non-rendering payment form and
+was fixed by populating the variable (publishable key is public by design).

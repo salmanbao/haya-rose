@@ -418,10 +418,13 @@ codes/reset tokens (notification boundary — later phase).
   (`return` read/create/update); admin refund `POST /admin/payments/:id/refund`
   (RBAC `refund` create); refund reasons CRUD; order credit lines; events
   `order.return_requested` / `order.return_received`.
-- **Verified security gap (registered):** store `POST /store/returns` has NO
-  authentication middleware and accepts customer-supplied `order_id`,
-  `items`, and `return_shipping.price` — hardening (auth + ownership +
-  server-side cost) required before launch (REQ-RET-002/003, T-RET-01/02).
+- **Verified security gap (REGISTERED, HARDENING IMPLEMENTED):** store
+  `POST /store/returns` has NO authentication middleware and accepts
+  customer-supplied `order_id`, `items`, and `return_shipping.price`.
+  **T-RET-01/02 implemented 2026-08-19** (global store middleware
+  `/store/returns` — customer auth required, ownership via `customer_id`,
+  client `return_shipping.price` stripped before native zod validation;
+  unit 7 + integration 6 tests) — REQ-RET-002/003 enforced.
 - No return-shipping or refund provider behavior implemented or verified
   (TCS/Aramex return capabilities and payment-provider refund behavior
   UNVERIFIED — §35 of the spec).

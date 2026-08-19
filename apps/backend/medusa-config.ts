@@ -180,6 +180,23 @@ const authModule = {
 
 const redisModuleOptions = { redisUrl: process.env.REDIS_URL }
 
+// Integration-test queue isolation. The Medusa test runner boots one app
+// per spec file against a shared Redis, but keeps the native queue name
+// ("events-queue"). BullMQ delivers each job to exactly ONE worker, so a
+// worker left behind by a previous spec file (the runner's cleanup logs
+// and swallows shutdown errors) can steal this file's events; a stolen job
+// finds no subscriber in the stale worker's local registry and is lost —
+// intermittently failing event-waiting tests. The config file is
+// re-evaluated per spec file (fresh jest module registry), so a per-
+// evaluation queue name isolates each suite's event bus the same way the
+// runner already isolates its per-suite database. Dev/prod/build never set
+// JEST_WORKER_ID and keep the native default queue name.
+const eventBusQueueName = process.env.JEST_WORKER_ID
+  ? `events-queue-test-${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 8)}`
+  : undefined
+
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
@@ -227,7 +244,10 @@ module.exports = defineConfig({
     },
     [Modules.EVENT_BUS]: {
       resolve: '@medusajs/medusa/event-bus-redis',
-      options: redisModuleOptions,
+      options: {
+        ...redisModuleOptions,
+        ...(eventBusQueueName ? { queueName: eventBusQueueName } : {}),
+      },
     },
     [Modules.WORKFLOW_ENGINE]: {
       resolve: '@medusajs/medusa/workflow-engine-redis',
